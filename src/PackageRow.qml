@@ -53,6 +53,7 @@ Item {
         anchors.topMargin: 3
         anchors.bottomMargin: 3
         radius: Math.min(8, theme.radius)
+        clip: true
         color: root.selected
                ? theme.selection
                : (hoverArea.containsMouse ? theme.lighterBackground : theme.background)
@@ -71,11 +72,13 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: 12
             anchors.rightMargin: 12
-            spacing: 12
+            spacing: 10
 
             // App icon with styled source-colored fallback monogram.
             Rectangle {
                 Layout.preferredWidth: 36
+                Layout.minimumWidth: 36
+                Layout.maximumWidth: 36
                 Layout.preferredHeight: 36
                 Layout.alignment: Qt.AlignVCenter
                 radius: Math.min(8, theme.radius)
@@ -111,11 +114,13 @@ Item {
             // Title, source badge, and one-line description.
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 3
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     spacing: 6
 
                     Text {
@@ -124,22 +129,27 @@ Item {
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
-                        Layout.maximumWidth: 260
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 40
+                        Layout.maximumWidth: Math.ceil(implicitWidth) + 6
                     }
 
                     Text {
-                        visible: root.displayName.toLowerCase() !== root.name.toLowerCase()
+                        visible: root.displayName.toLowerCase() !== root.name.toLowerCase() && root.width >= 520
                         text: root.name
                         color: theme.darkForeground
                         font.pixelSize: 11
                         elide: Text.ElideRight
-                        Layout.maximumWidth: 160
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        Layout.maximumWidth: Math.min(160, Math.ceil(implicitWidth) + 4)
                     }
 
                     // Source pill.
                     Rectangle {
                         height: 18
-                        implicitWidth: sourceTag.implicitWidth + 10
+                        Layout.preferredWidth: sourceTag.implicitWidth + 10
+                        Layout.minimumWidth: sourceTag.implicitWidth + 10
                         radius: Math.min(4, theme.radius)
                         color: Qt.rgba(Qt.color(root.sourceColor(root.source)).r,
                                        Qt.color(root.sourceColor(root.source)).g,
@@ -159,7 +169,8 @@ Item {
                     Rectangle {
                         visible: root.isOrphan
                         height: 18
-                        implicitWidth: orphanTag.implicitWidth + 10
+                        Layout.preferredWidth: orphanTag.implicitWidth + 10
+                        Layout.minimumWidth: orphanTag.implicitWidth + 10
                         radius: Math.min(4, theme.radius)
                         color: Qt.rgba(Qt.color(theme.orange).r, Qt.color(theme.orange).g,
                                        Qt.color(theme.orange).b, 0.2)
@@ -174,11 +185,15 @@ Item {
                         }
                     }
 
-                    Item { Layout.fillWidth: true }
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                    }
                 }
 
                 Text {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                     text: root.hasUpdate
                           ? (root.availableVersion.length > 0
                              ? qsTr("Update: %1 → %2").arg(root.version).arg(root.availableVersion)
@@ -192,7 +207,8 @@ Item {
 
             // Disk size readout.
             Text {
-                Layout.preferredWidth: 78
+                Layout.preferredWidth: 74
+                Layout.minimumWidth: 64
                 Layout.alignment: Qt.AlignVCenter
                 horizontalAlignment: Text.AlignRight
                 text: {
@@ -208,6 +224,7 @@ Item {
             Rectangle {
                 visible: root.hasUpdate
                 Layout.preferredWidth: updateBtnLabel.implicitWidth + 18
+                Layout.minimumWidth: updateBtnLabel.implicitWidth + 18
                 Layout.preferredHeight: 28
                 Layout.alignment: Qt.AlignVCenter
                 radius: Math.min(6, theme.radius)

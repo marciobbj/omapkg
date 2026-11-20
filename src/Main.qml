@@ -401,6 +401,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 42
                 color: theme.background
+                clip: true
 
                 RowLayout {
                     anchors.fill: parent
@@ -410,7 +411,7 @@ ApplicationWindow {
 
                     // Segmented bar.
                     Rectangle {
-                        Layout.preferredWidth: 220
+                        Layout.preferredWidth: Math.min(220, Math.max(72, win.width * 0.16))
                         Layout.preferredHeight: 8
                         radius: Math.min(4, theme.radius)
                         color: theme.darkBackground
@@ -560,7 +561,7 @@ ApplicationWindow {
 
                 // Left Sidebar.
                 Rectangle {
-                    Layout.preferredWidth: 212
+                    Layout.preferredWidth: win.width < 940 ? 204 : 212
                     Layout.fillHeight: true
                     color: theme.darkBackground
 
@@ -709,6 +710,7 @@ ApplicationWindow {
                 // Center Package List + Collapsible Log Drawer.
                 ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 260
                     Layout.fillHeight: true
                     spacing: 0
 
@@ -727,6 +729,7 @@ ApplicationWindow {
                             // Search box.
                             Rectangle {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 100
                                 Layout.preferredHeight: 34
                                 radius: Math.min(6, theme.radius)
                                 color: theme.background
@@ -910,13 +913,15 @@ ApplicationWindow {
 
                 // Right Detail Inspector.
                 Rectangle {
+                    visible: win.width >= 760
                     Layout.preferredWidth: 1
                     Layout.fillHeight: true
                     color: theme.selection
                 }
 
                 DetailPane {
-                    Layout.preferredWidth: 336
+                    visible: win.width >= 760
+                    Layout.preferredWidth: win.width < 1020 ? 276 : 336
                     Layout.fillHeight: true
                     pkg: win.selectedPkg
                     details: backend.selectedDetails
