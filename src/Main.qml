@@ -852,7 +852,6 @@ ApplicationWindow {
 
                             delegate: PackageRow {
                                 selected: pkgId === win.selectedId
-                                maxSizeBytes: backend.packages.maxVisibleBytes
                                 busy: backend.busy
                                 onClicked: win.selectByIndex(index)
                                 onUpdateRequested: backend.updatePackage(pkgId)

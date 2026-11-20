@@ -21,7 +21,6 @@ Item {
     required property string iconName
 
     required property bool selected
-    required property real maxSizeBytes
     required property bool busy
 
     signal clicked()
@@ -191,39 +190,18 @@ Item {
                 }
             }
 
-            // Disk size + proportional bar.
-            ColumnLayout {
-                Layout.preferredWidth: 96
+            // Disk size readout.
+            Text {
+                Layout.preferredWidth: 78
                 Layout.alignment: Qt.AlignVCenter
-                spacing: 4
-
-                Text {
-                    Layout.alignment: Qt.AlignRight
-                    text: {
-                        void translator.language
-                        return translator.formatBytes(root.sizeBytes)
-                    }
-                    color: theme.lightForeground
-                    font.pixelSize: 12
-                    font.weight: Font.Medium
+                horizontalAlignment: Text.AlignRight
+                text: {
+                    void translator.language
+                    return translator.formatBytes(root.sizeBytes)
                 }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 4
-                    radius: Math.min(2, theme.radius)
-                    color: theme.darkBackground
-
-                    Rectangle {
-                        height: parent.height
-                        radius: parent.radius
-                        width: root.maxSizeBytes > 0
-                               ? Math.max(root.sizeBytes > 0 ? 4 : 0,
-                                          parent.width * Math.min(1.0, root.sizeBytes / root.maxSizeBytes))
-                               : 0
-                        color: root.sourceColor(root.source)
-                    }
-                }
+                color: theme.lightForeground
+                font.pixelSize: 12
+                font.weight: Font.Medium
             }
 
             // Inline quick-update button when an update is available.
