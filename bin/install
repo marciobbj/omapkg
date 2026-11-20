@@ -2,6 +2,8 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-"$ROOT/bin/build"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omapkg-build"
+mkdir -p "$CACHE_DIR"
+
 cd "$ROOT/pkgbuild"
-exec makepkg -fsi "$@"
+BUILDDIR="$CACHE_DIR" PKGDEST="$CACHE_DIR" exec makepkg -fsic "$@"

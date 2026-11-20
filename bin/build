@@ -2,10 +2,11 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-mkdir -p "$ROOT/build"
-cd "$ROOT/build"
+BUILD_DIR="${OMAPKG_BUILD_DIR:-$ROOT/build}"
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
 
 qmake6 "$ROOT/omapkg.pro"
 make -j"$(nproc)"
 
-echo "Built $ROOT/build/omapkg"
+echo "Built $BUILD_DIR/omapkg"
