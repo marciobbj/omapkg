@@ -5,17 +5,23 @@
   "version": "0.1.0",
   "author": "Marcio Bernardes",
   "license": "MIT",
+  "homepage": "https://github.com/marciobbj/omapkg",
   "description": "Indicates available updates across Omarchy, Pacman, AUR, and Flatpak and opens Omapkg",
   "kinds": [
     "bar-widget"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "bar-plugin/BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Omapkg",
     "description": "Shows an indicator when package updates are available and opens Omapkg on click",
     "category": "System",
+    "aliases": [
+      "packages",
+      "updates",
+      "pkg"
+    ],
     "allowMultiple": false,
     "defaultSection": "right"
   }
