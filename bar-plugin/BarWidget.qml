@@ -14,6 +14,7 @@ BarWidget {
 
   property int updateCount: 0
   property bool checking: false
+  readonly property string helperPath: decodeURIComponent(String(Qt.resolvedUrl("omapkg-bar-helper")).replace(/^file:\/\//, ""))
 
   function refresh() {
     if (checkProc.running) return
@@ -32,8 +33,7 @@ BarWidget {
   }
 
   function openApp() {
-    if (!root.bar) return
-    root.bar.run("omarchy-launch-or-focus omapkg omapkg")
+    Quickshell.execDetached([root.helperPath, "open"])
   }
 
   function localizedTooltip() {
@@ -88,7 +88,7 @@ BarWidget {
 
   Process {
     id: checkProc
-    command: ["omapkg", "summary", "--json"]
+    command: [root.helperPath, "summary"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applySummary(text)

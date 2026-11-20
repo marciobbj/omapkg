@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+find_omapkg() {
+  if command -v omapkg >/dev/null 2>&1; then
+    command -v omapkg
+    return 0
+  fi
+  if [[ -x "$HOME/.local/bin/omapkg" ]]; then
+    printf '%s\n' "$HOME/.local/bin/omapkg"
+    return 0
+  fi
+  if [[ -x "$PLUGIN_ROOT/build/omapkg" ]]; then
+    printf '%s\n' "$PLUGIN_ROOT/build/omapkg"
+    return 0
+  fi
+  return 1
+}
+
+count_updates_fallback() {
+  local total=0
+  local count=0
+
+  if command -v checkupdates >/dev/null 2>&1; then
+    count="$(checkupdates 2>/dev/null | awk 'NF { n++ } END { print n + 0 }')"
+    total=$((total + count))
+  fi
+
+  if command -v yay >/dev/null 2>&1; then
+    count="$(yay -Qua 2>/dev/null | awk 'NF { n++ } END { print n + 0 }')"
+    total=$((total + count))
+  fi
+
+  if command -v flatpak >/dev/null 2>&1; then
+    count="$(flatpak remote-ls --updates --columns=application 2>/dev/null | awk 'NF { n++ } END { print n + 0 }')"
+    total=$((total + count))
+  fi
+
+  printf '{"updatesCount":%d}\n' "$total"
+}
+
+cmd="${1:-summary}"
+
+case "$cmd" in
+  summary)
+    if bin_path="$(find_omapkg)"; then
+      exec "$bin_path" summary --json
+    else
+      count_updates_fallback
+    fi
+    ;;
+  open)
+    if bin_path="$(find_omapkg)"; then
+      if command -v omapkg >/dev/null 2>&1; then
+        exec omarchy-launch-or-focus omapkg omapkg
+      else
+        escaped_bin="$(printf '%q' "$bin_path")"
+        exec omarchy-launch-or-focus omapkg "$escaped_bin"
+      fi
+    fi
+
+    if [[ -x "$PLUGIN_ROOT/bin/install" ]] && command -v omarchy-launch-floating-terminal-with-presentation >/dev/null 2>&1; then
+      escaped_root="$(printf '%q' "$PLUGIN_ROOT")"
+      exec omarchy-launch-floating-terminal-with-presentation \
+        "cd $escaped_root && echo 'Omapkg desktop app is not installed yet.' && echo '' && if gum confirm 'Build and install Omapkg now?'; then ./bin/install && setsid -f omapkg >/dev/null 2>&1; fi"
+    fi
+    ;;
+  *)
+    printf 'Usage: %s [summary|open]\n' "$0" >&2
+    exit 1
+    ;;
+esac
