@@ -1,0 +1,38 @@
+pkgname=omarchy-update-central
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Manage installed apps, disk usage, and updates across Omarchy, Pacman, AUR, and Flatpak'
+arch=('x86_64' 'aarch64')
+license=('MIT')
+depends=(
+  'qt6-base'
+  'qt6-declarative'
+  'qt6-svg'
+  'qt6-wayland'
+  'xdg-desktop-portal'
+  'expac'
+  'pacman-contrib'
+  'polkit'
+)
+optdepends=(
+  'yay: AUR package updates and management'
+  'flatpak: Flatpak application management'
+)
+makedepends=('gcc' 'make')
+source=()
+sha256sums=()
+
+build() {
+  cd "$startdir/.."
+  ./bin/build
+}
+
+package() {
+  cd "$startdir/.."
+  install -Dm755 build/omarchy-update-central "$pkgdir/usr/bin/omarchy-update-central"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$startdir/omarchy-update-central.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omarchy-update-central.svg"
+  install -Dm644 "$startdir/omarchy-update-central.desktop" "$pkgdir/usr/share/applications/omarchy-update-central.desktop"
+  install -Dm644 bar-plugin/manifest.json "$pkgdir/usr/share/$pkgname/bar-plugin/manifest.json"
+  install -Dm644 bar-plugin/BarWidget.qml "$pkgdir/usr/share/$pkgname/bar-plugin/BarWidget.qml"
+}
