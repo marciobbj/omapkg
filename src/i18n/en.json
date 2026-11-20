@@ -1,0 +1,10 @@
+{
+  "%n items": {
+    "one": "%n item",
+    "other": "%n items"
+  },
+  "%n packages": {
+    "one": "%n package",
+    "other": "%n packages"
+  }
+}
