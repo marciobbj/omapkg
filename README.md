@@ -9,7 +9,7 @@ Omarchy menu bar update indicator (`marciobbj.omapkg`) and native Qt Quick packa
 - **Omarchy menu bar widget (`marciobbj.omapkg`)** — checks installed sources for waiting updates, lights up with an accent badge when updates are available, and opens or focuses Omapkg on click (middle-click forces an immediate check).
 - **Unified package sources** — Omarchy (`[omarchy]`), Pacman (`core`/`extra`/`multilib`/custom repos), AUR (`yay`), and Flatpak (automatically detected).
 - **Disk usage analytics** — stacked breakdown bar per source, per-app disk usage readout, sort by largest packages, and orphan disk reclaim summary.
-- **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`), update individual packages or update all, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
+- **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`), route Omarchy and Pacman system updates through Omarchy's full `omarchy-update` flow (avoiding partial upgrades), update Flatpak apps and up-to-date AUR packages, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
 - **Live Omarchy theme & Hyprland rounding** — watches `~/.local/state/omarchy/current/theme/colors.toml` and `hyprctl decoration:rounding` live.
 - **All 50 Omarchy 4.5 languages** — watches `~/.config/omarchy/language` live with CLDR plurals, localized disk sizes/dates/numbers, and RTL layout mirroring.
 - **Headless CLI** — scriptable `list`, `updates`, and `summary` commands with `--json` output.

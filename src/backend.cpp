@@ -56,6 +56,9 @@ Backend::Backend(bool autoLoad, QObject *parent) : QObject(parent) {
     m_flatpakPath = QStandardPaths::findExecutable("flatpak");
     m_pkexecPath = QStandardPaths::findExecutable("pkexec");
     m_omarchyDefaultsPath = QStandardPaths::findExecutable("omarchy-pkg-defaults");
+    m_omarchyUpdatePath = QStandardPaths::findExecutable("omarchy-update");
+    m_omarchyTerminalPath = QStandardPaths::findExecutable("omarchy-launch-floating-terminal-with-presentation");
+    m_xdgTerminalPath = QStandardPaths::findExecutable("xdg-terminal-exec");
     m_gtkLaunchPath = QStandardPaths::findExecutable("gtk-launch");
 
     if (autoLoad)
@@ -529,6 +532,73 @@ void Backend::finishUpdateCheckStep() {
         QProcess::startDetached(omarchyShell, {"marciobbj.omapkg", "refresh"});
 }
 
+PackageUpdateStrategy Backend::planPackageUpdate(const QString &source, bool hasPendingSystemUpdates) {
+    // Arch Linux does not support partial upgrades: every Omarchy or Pacman
+    // package update must go through Omarchy's full system update flow.
+    if (source == "omarchy" || source == "pacman")
+        return PackageUpdateStrategy::OmarchyFullUpdate;
+    if (source == "aur") {
+        // AUR packages should be built against an upgraded system; when system
+        // updates are pending, route through Omarchy's full update flow (which
+        // upgrades system packages first and then runs omarchy-update-aur-pkgs).
+        return hasPendingSystemUpdates
+            ? PackageUpdateStrategy::OmarchyFullUpdate
+            : PackageUpdateStrategy::AurPackageUpdate;
+    }
+    if (source == "flatpak")
+        return PackageUpdateStrategy::FlatpakPackageUpdate;
+    return PackageUpdateStrategy::None;
+}
+
+SystemUpdateLaunch Backend::resolveOmarchyUpdateLaunch(const QString &omarchyTerminalPath,
+                                                       const QString &omarchyUpdatePath,
+                                                       const QString &xdgTerminalPath) {
+    if (omarchyUpdatePath.isEmpty())
+        return {};
+    if (!omarchyTerminalPath.isEmpty())
+        return {omarchyTerminalPath, {"omarchy-update"}};
+    if (!xdgTerminalPath.isEmpty())
+        return {xdgTerminalPath, {"-e", omarchyUpdatePath}};
+    return {};
+}
+
+bool Backend::hasPendingSystemUpdates() const {
+    for (const auto &pkg : m_model.allPackages()) {
+        if (pkg.hasUpdate && (pkg.source == "omarchy" || pkg.source == "pacman"))
+            return true;
+    }
+    return false;
+}
+
+bool Backend::launchOmarchySystemUpdate(const QString &title) {
+    const auto launch = resolveOmarchyUpdateLaunch(
+        m_omarchyTerminalPath, m_omarchyUpdatePath, m_xdgTerminalPath);
+    if (launch.program.isEmpty()) {
+        m_errorMessage = tr("omarchy-update is not available on this system.");
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorMessage.clear();
+    if (!m_logText.isEmpty())
+        appendLog("\n");
+    appendLog("==> " + title + "\n");
+    appendLog("$ " + QFileInfo(launch.program).fileName() + " " + launch.arguments.join(' ') + "\n");
+
+    if (!QProcess::startDetached(launch.program, launch.arguments)) {
+        m_errorMessage = tr("Failed to launch omarchy-update.");
+        appendLog(m_errorMessage + "\n");
+        emit stateChanged();
+        return false;
+    }
+
+    m_lastOperationSucceeded = true;
+    m_statusMessage = tr("Updating Omarchy and Pacman packages");
+    emit stateChanged();
+    emit operationChanged();
+    return true;
+}
+
 void Backend::updatePackage(const QString &pkgId) {
     if (m_busy)
         return;
@@ -537,21 +607,14 @@ void Backend::updatePackage(const QString &pkgId) {
     if (!pkg)
         return;
 
+    const PackageUpdateStrategy strategy = planPackageUpdate(pkg->source, hasPendingSystemUpdates());
+    if (strategy == PackageUpdateStrategy::OmarchyFullUpdate) {
+        launchOmarchySystemUpdate(tr("Updating Omarchy and Pacman packages"));
+        return;
+    }
+
     QList<QueuedCommand> commands;
-    if (pkg->source == "omarchy" || pkg->source == "pacman") {
-        if (m_pkexecPath.isEmpty()) {
-            m_errorMessage = tr("pkexec is not available for privileged package actions.");
-            emit stateChanged();
-            return;
-        }
-        commands.append({
-            m_pkexecPath,
-            {m_pacmanPath, "-Sy", "--noconfirm", "--overwrite", "/usr/share/omarchy/*", pkg->name},
-            tr("Updating %1").arg(pkg->displayName),
-            false,
-            false
-        });
-    } else if (pkg->source == "aur") {
+    if (strategy == PackageUpdateStrategy::AurPackageUpdate) {
         if (m_yayPath.isEmpty() || m_pkexecPath.isEmpty()) {
             m_errorMessage = tr("yay and pkexec are required to update AUR packages.");
             emit stateChanged();
@@ -564,7 +627,7 @@ void Backend::updatePackage(const QString &pkgId) {
             true,
             false
         });
-    } else if (pkg->source == "flatpak") {
+    } else if (strategy == PackageUpdateStrategy::FlatpakPackageUpdate) {
         if (m_flatpakPath.isEmpty())
             return;
         commands.append({
@@ -598,21 +661,18 @@ void Backend::updateAll() {
             needFlatpak = true;
     }
 
-    QList<QueuedCommand> commands;
+    // Route system package updates through Omarchy's full update flow (`omarchy-update`),
+    // which handles snapshots, keyrings, full `-Syu`, migrations, hooks, AUR rebuilds,
+    // and boot verification together.
     if (needSystem) {
-        if (m_pkexecPath.isEmpty()) {
-            m_errorMessage = tr("pkexec is not available for privileged package actions.");
-            emit stateChanged();
+        if (!launchOmarchySystemUpdate(tr("Updating all packages")))
             return;
-        }
-        commands.append({
-            m_pkexecPath,
-            {m_pacmanPath, "-Syu", "--noconfirm", "--overwrite", "/usr/share/omarchy/*"},
-            tr("Updating Omarchy and Pacman packages"),
-            false,
-            false
-        });
+        // omarchy-update runs omarchy-update-aur-pkgs after upgrading system packages,
+        // so avoid invoking yay concurrently against the same pacman lock.
+        needAur = false;
     }
+
+    QList<QueuedCommand> commands;
     if (needAur && !m_yayPath.isEmpty() && !m_pkexecPath.isEmpty()) {
         commands.append({
             m_yayPath,

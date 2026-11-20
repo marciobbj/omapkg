@@ -285,6 +285,47 @@ private slots:
         model.setSortBy("date");
         QCOMPARE(model.get(0).value("name").toString(), QString("yay-bin"));
     }
+
+    void systemUpdateRouting() {
+        // Omarchy and Pacman updates must always route through Omarchy's full update flow
+        // rather than performing unsupported Arch partial upgrades (`pacman -Sy <pkg>`).
+        QCOMPARE(Backend::planPackageUpdate("omarchy", false), PackageUpdateStrategy::OmarchyFullUpdate);
+        QCOMPARE(Backend::planPackageUpdate("omarchy", true), PackageUpdateStrategy::OmarchyFullUpdate);
+        QCOMPARE(Backend::planPackageUpdate("pacman", false), PackageUpdateStrategy::OmarchyFullUpdate);
+        QCOMPARE(Backend::planPackageUpdate("pacman", true), PackageUpdateStrategy::OmarchyFullUpdate);
+
+        // AUR packages route through the full update flow when system updates are waiting,
+        // and update individually only once system packages are up to date.
+        QCOMPARE(Backend::planPackageUpdate("aur", true), PackageUpdateStrategy::OmarchyFullUpdate);
+        QCOMPARE(Backend::planPackageUpdate("aur", false), PackageUpdateStrategy::AurPackageUpdate);
+
+        // Flatpak apps are sandboxed and can always update independently.
+        QCOMPARE(Backend::planPackageUpdate("flatpak", true), PackageUpdateStrategy::FlatpakPackageUpdate);
+        QCOMPARE(Backend::planPackageUpdate("flatpak", false), PackageUpdateStrategy::FlatpakPackageUpdate);
+
+        // Launch resolution prefers Omarchy's floating presentation terminal wrapper.
+        const auto primary = Backend::resolveOmarchyUpdateLaunch(
+            "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation",
+            "/usr/share/omarchy/bin/omarchy-update",
+            "/usr/bin/xdg-terminal-exec");
+        QCOMPARE(primary.program, QString("/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation"));
+        QCOMPARE(primary.arguments, QStringList({"omarchy-update"}));
+
+        // Falls back to xdg-terminal-exec when the presentation wrapper is absent.
+        const auto fallback = Backend::resolveOmarchyUpdateLaunch(
+            "",
+            "/usr/share/omarchy/bin/omarchy-update",
+            "/usr/bin/xdg-terminal-exec");
+        QCOMPARE(fallback.program, QString("/usr/bin/xdg-terminal-exec"));
+        QCOMPARE(fallback.arguments, QStringList({"-e", "/usr/share/omarchy/bin/omarchy-update"}));
+
+        // Refuses to construct a launch when omarchy-update is unavailable.
+        const auto missing = Backend::resolveOmarchyUpdateLaunch(
+            "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation",
+            "",
+            "/usr/bin/xdg-terminal-exec");
+        QVERIFY(missing.program.isEmpty());
+    }
 };
 
 QTEST_MAIN(OmapkgTests)

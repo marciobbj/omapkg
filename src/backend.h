@@ -26,6 +26,18 @@ struct QueuedCommand {
     bool forceCLocale = false;
 };
 
+struct SystemUpdateLaunch {
+    QString program;
+    QStringList arguments;
+};
+
+enum class PackageUpdateStrategy {
+    None,
+    OmarchyFullUpdate,
+    AurPackageUpdate,
+    FlatpakPackageUpdate,
+};
+
 class Backend : public QObject {
     Q_OBJECT
     Q_PROPERTY(QObject *packages READ packages CONSTANT)
@@ -78,7 +90,7 @@ public:
     // Synchronous snapshot helper used by the headless CLI commands.
     QJsonObject runCliSnapshot(bool includeUpdates);
 
-    // Pure parsing helpers exposed for unit testing.
+    // Pure parsing and update-routing helpers exposed for unit testing.
     static QVector<PackageItem> parseExpacInstalled(const QString &output,
                                                     const QHash<QString, QString> &repoByPkg,
                                                     const QSet<QString> &orphans,
@@ -91,6 +103,10 @@ public:
     static QVariantMap parsePacmanDetails(const QString &output);
     static QVariantMap parseFlatpakDetails(const QString &output);
     static QHash<QString, DesktopEntryInfo> scanDesktopEntries(const QStringList &directories);
+    static PackageUpdateStrategy planPackageUpdate(const QString &source, bool hasPendingSystemUpdates);
+    static SystemUpdateLaunch resolveOmarchyUpdateLaunch(const QString &omarchyTerminalPath,
+                                                         const QString &omarchyUpdatePath,
+                                                         const QString &xdgTerminalPath);
 
 signals:
     void stateChanged();
@@ -102,6 +118,8 @@ private:
     void startReloadStepFinished();
     void finalizePackageLoad();
     void finishUpdateCheckStep();
+    bool hasPendingSystemUpdates() const;
+    bool launchOmarchySystemUpdate(const QString &title);
     void enqueueOperation(const QString &title, QList<QueuedCommand> commands);
     void runNextCommand();
     void appendLog(const QString &text);
@@ -116,6 +134,9 @@ private:
     QString m_flatpakPath;
     QString m_pkexecPath;
     QString m_omarchyDefaultsPath;
+    QString m_omarchyUpdatePath;
+    QString m_omarchyTerminalPath;
+    QString m_xdgTerminalPath;
     QString m_gtkLaunchPath;
 
     bool m_loading = false;

@@ -274,11 +274,37 @@ Rectangle {
                     anchors.margins: 9
                     spacing: 2
 
-                    Text {
-                        text: qsTr("Update available")
-                        color: theme.green
-                        font.pixelSize: 12
-                        font.bold: true
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Text {
+                            text: qsTr("Update available")
+                            color: theme.green
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Rectangle {
+                            visible: root.pkg.source === "omarchy" || root.pkg.source === "pacman"
+                            height: 18
+                            width: omarchyUpdateBadge.implicitWidth + 10
+                            radius: Math.min(4, theme.radius)
+                            color: Qt.rgba(Qt.color(theme.green).r, Qt.color(theme.green).g,
+                                           Qt.color(theme.green).b, 0.2)
+
+                            Text {
+                                id: omarchyUpdateBadge
+                                anchors.centerIn: parent
+                                text: "omarchy-update"
+                                color: theme.green
+                                font.pixelSize: 10
+                                font.family: "monospace"
+                                font.bold: true
+                            }
+                        }
                     }
 
                     Text {
