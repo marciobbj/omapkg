@@ -1,4 +1,4 @@
-// omarchy-update-central — manage installed Omarchy, Pacman, AUR, and Flatpak apps.
+// omapkg — manage installed Omarchy, Pacman, AUR, and Flatpak apps.
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -22,7 +22,7 @@ namespace {
 int runCli(int argc, char *argv[], const QString &command) {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
-    app.setApplicationName("omarchy-update-central");
+    app.setApplicationName("omapkg");
     app.setApplicationVersion("0.1.0");
 
     bool asJson = false;
@@ -82,19 +82,19 @@ int main(int argc, char *argv[]) {
             return runCli(argc, argv, cmd);
         if (cmd == "--help" || cmd == "-h") {
             QTextStream(stdout)
-                << "Usage: omarchy-update-central [open|list|updates|summary] [--json]\n";
+                << "Usage: omapkg [open|list|updates|summary] [--json]\n";
             return 0;
         }
     }
 
     QGuiApplication app(argc, argv);
-    app.setApplicationName("omarchy-update-central");
+    app.setApplicationName("omapkg");
     app.setApplicationVersion("0.1.0");
 
-    // Matches the window to omarchy-update-central.desktop so the compositor
+    // Matches the window to omapkg.desktop so the compositor
     // (Wayland app_id) and app launcher pick up the installed icon.
-    app.setDesktopFileName("omarchy-update-central");
-    app.setWindowIcon(QIcon::fromTheme("omarchy-update-central"));
+    app.setDesktopFileName("omapkg");
+    app.setWindowIcon(QIcon::fromTheme("omapkg"));
 
     QQuickStyle::setStyle("Material");
 

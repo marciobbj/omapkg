@@ -5,7 +5,7 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 mkdir -p "$ROOT/build"
 cd "$ROOT/build"
 
-qmake6 "$ROOT/omarchy-update-central.pro"
+qmake6 "$ROOT/omapkg.pro"
 make -j"$(nproc)"
 
-echo "Built $ROOT/build/omarchy-update-central"
+echo "Built $ROOT/build/omapkg"

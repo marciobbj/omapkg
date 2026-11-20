@@ -1,7 +1,8 @@
-pkgname=omarchy-update-central
+pkgname=omapkg
 pkgver=0.1.0
 pkgrel=1
 pkgdesc='Manage installed apps, disk usage, and updates across Omarchy, Pacman, AUR, and Flatpak'
+url='https://github.com/marciobbj/omapkg'
 arch=('x86_64' 'aarch64')
 license=('MIT')
 depends=(
@@ -29,10 +30,10 @@ build() {
 
 package() {
   cd "$startdir/.."
-  install -Dm755 build/omarchy-update-central "$pkgdir/usr/bin/omarchy-update-central"
+  install -Dm755 build/omapkg "$pkgdir/usr/bin/omapkg"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-  install -Dm644 "$startdir/omarchy-update-central.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omarchy-update-central.svg"
-  install -Dm644 "$startdir/omarchy-update-central.desktop" "$pkgdir/usr/share/applications/omarchy-update-central.desktop"
+  install -Dm644 "$startdir/omapkg.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/omapkg.svg"
+  install -Dm644 "$startdir/omapkg.desktop" "$pkgdir/usr/share/applications/omapkg.desktop"
   install -Dm644 bar-plugin/manifest.json "$pkgdir/usr/share/$pkgname/bar-plugin/manifest.json"
   install -Dm644 bar-plugin/BarWidget.qml "$pkgdir/usr/share/$pkgname/bar-plugin/BarWidget.qml"
 }

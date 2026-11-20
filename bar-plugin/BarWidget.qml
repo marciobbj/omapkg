@@ -4,13 +4,13 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 
-// Omarchy bar widget for Update Central: polls installed sources (Omarchy,
-// Pacman, AUR, Flatpak) via `omarchy-update-central summary --json`, lights up
-// with an accent indicator when updates are waiting, and opens or focuses the
-// desktop app on click.
+// Omarchy bar widget for Omapkg: polls installed sources (Omarchy,
+// Pacman, AUR, Flatpak) via `omapkg summary --json`, lights up with
+// an accent indicator when updates are waiting, and opens or focuses
+// the desktop app on click.
 BarWidget {
   id: root
-  moduleName: "local.omarchy-update-central"
+  moduleName: "marciobbj.omapkg"
 
   property int updateCount: 0
   property bool checking: false
@@ -33,53 +33,53 @@ BarWidget {
 
   function openApp() {
     if (!root.bar) return
-    root.bar.run("omarchy-launch-or-focus omarchy-update-central omarchy-update-central")
+    root.bar.run("omarchy-launch-or-focus omapkg omapkg")
   }
 
   function localizedTooltip() {
     var lang = String(I18n.language || "en")
     var n = root.updateCount
     if (lang.indexOf("pt") === 0) {
-      if (root.checking && n === 0) return "Central de Atualizações — Verificando…"
+      if (root.checking && n === 0) return "Omapkg — Verificando…"
       return n > 0
-        ? "Central de Atualizações — " + n + (n === 1 ? " atualização disponível" : " atualizações disponíveis")
-        : "Central de Atualizações — Tudo atualizado"
+        ? "Omapkg — " + n + (n === 1 ? " atualização disponível" : " atualizações disponíveis")
+        : "Omapkg — Tudo atualizado"
     }
     if (lang.indexOf("es") === 0) {
-      if (root.checking && n === 0) return "Central de Actualizaciones — Buscando…"
+      if (root.checking && n === 0) return "Omapkg — Buscando…"
       return n > 0
-        ? "Central de Actualizaciones — " + n + (n === 1 ? " actualización disponible" : " actualizaciones disponibles")
-        : "Central de Actualizaciones — Todo actualizado"
+        ? "Omapkg — " + n + (n === 1 ? " actualización disponible" : " actualizaciones disponibles")
+        : "Omapkg — Todo actualizado"
     }
     if (lang === "da") {
-      if (root.checking && n === 0) return "Opdateringscentral — Tjekker…"
+      if (root.checking && n === 0) return "Omapkg — Tjekker…"
       return n > 0
-        ? "Opdateringscentral — " + n + (n === 1 ? " opdatering tilgængelig" : " opdateringer tilgængelige")
-        : "Opdateringscentral — Alt er opdateret"
+        ? "Omapkg — " + n + (n === 1 ? " opdatering tilgængelig" : " opdateringer tilgængelige")
+        : "Omapkg — Alt er opdateret"
     }
     if (lang === "de") {
-      if (root.checking && n === 0) return "Update-Zentrale — Prüfe…"
+      if (root.checking && n === 0) return "Omapkg — Prüfe…"
       return n > 0
-        ? "Update-Zentrale — " + n + (n === 1 ? " Update verfügbar" : " Updates verfügbar")
-        : "Update-Zentrale — Alles ist aktuell"
+        ? "Omapkg — " + n + (n === 1 ? " Update verfügbar" : " Updates verfügbar")
+        : "Omapkg — Alles ist aktuell"
     }
     if (lang === "fr") {
-      if (root.checking && n === 0) return "Centre de mises à jour — Vérification…"
+      if (root.checking && n === 0) return "Omapkg — Vérification…"
       return n > 0
-        ? "Centre de mises à jour — " + n + (n === 1 ? " mise à jour disponible" : " mises à jour disponibles")
-        : "Centre de mises à jour — Tout est à jour"
+        ? "Omapkg — " + n + (n === 1 ? " mise à jour disponible" : " mises à jour disponibles")
+        : "Omapkg — Tout est à jour"
     }
-    if (root.checking && n === 0) return "Update Central — Checking…"
+    if (root.checking && n === 0) return "Omapkg — Checking…"
     return n > 0
-      ? "Update Central — " + n + (n === 1 ? " update available" : " updates available")
-      : "Update Central — Everything is up to date"
+      ? "Omapkg — " + n + (n === 1 ? " update available" : " updates available")
+      : "Omapkg — Everything is up to date"
   }
 
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   ShellIpc {
-    target: "local.omarchy-update-central"
+    target: "marciobbj.omapkg"
 
     function refresh(): void {
       root.broadcast("refresh")
@@ -88,7 +88,7 @@ BarWidget {
 
   Process {
     id: checkProc
-    command: ["omarchy-update-central", "summary", "--json"]
+    command: ["omapkg", "summary", "--json"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applySummary(text)

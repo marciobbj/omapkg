@@ -1,7 +1,7 @@
 QT += core gui qml quick quickcontrols2 svg
 
 CONFIG += c++17 release
-TARGET = omarchy-update-central
+TARGET = omapkg
 TEMPLATE = app
 
 HEADERS += \

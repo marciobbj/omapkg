@@ -10,7 +10,7 @@
 #include "theme.h"
 #include "translator.h"
 
-class UpdateCentralTests : public QObject {
+class OmapkgTests : public QObject {
     Q_OBJECT
 
 private slots:
@@ -76,7 +76,7 @@ private slots:
         Translator trPtBr(langFile, ":/i18n");
         QCOMPARE(trPtBr.language(), QString("pt-BR"));
         QCOMPARE(trPtBr.isRtl(), false);
-        QCOMPARE(trPtBr.translate("Main", "Update Central"), QString("Central de Atualizações"));
+        QCOMPARE(trPtBr.translate("Main", "Check updates"), QString("Verificar atualizações"));
         QCOMPARE(trPtBr.translate("Main", "%n packages", nullptr, 1), QString("%n pacote"));
         QCOMPARE(trPtBr.translate("Main", "%n packages", nullptr, 5), QString("%n pacotes"));
 
@@ -287,5 +287,5 @@ private slots:
     }
 };
 
-QTEST_MAIN(UpdateCentralTests)
-#include "omarchy-update-central_tests.moc"
+QTEST_MAIN(OmapkgTests)
+#include "omapkg_tests.moc"

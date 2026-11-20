@@ -526,7 +526,7 @@ void Backend::finishUpdateCheckStep() {
     // Keep the Omarchy bar widget indicator in sync when updates finish or clear.
     const QString omarchyShell = QStandardPaths::findExecutable("omarchy-shell");
     if (!omarchyShell.isEmpty())
-        QProcess::startDetached(omarchyShell, {"local.omarchy-update-central", "refresh"});
+        QProcess::startDetached(omarchyShell, {"marciobbj.omapkg", "refresh"});
 }
 
 void Backend::updatePackage(const QString &pkgId) {

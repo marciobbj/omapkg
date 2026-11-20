@@ -1,8 +1,8 @@
-# Update Central
+# Omapkg
 
 Native Qt Quick package and application manager for **Omarchy 4.5** — inspect disk usage, browse installed apps across **Omarchy**, **Pacman**, **AUR**, and **Flatpak**, apply updates, remove packages, and clean unused orphans, all following your active Omarchy theme and language live.
 
-![Update Central](screenshot.png)
+![Omapkg](screenshot.png)
 
 ## Features
 
@@ -11,7 +11,7 @@ Native Qt Quick package and application manager for **Omarchy 4.5** — inspect 
 - **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`), update individual packages or update all, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
 - **Live Omarchy theme & Hyprland rounding** — watches `~/.local/state/omarchy/current/theme/colors.toml` and `hyprctl decoration:rounding` live.
 - **All 50 Omarchy 4.5 languages** — watches `~/.config/omarchy/language` live with CLDR plurals, localized disk sizes/dates/numbers, and RTL layout mirroring.
-- **Omarchy menu bar widget** — included in [`bar-plugin/`](bar-plugin/) (`local.omarchy-update-central`). Lights up with an accent indicator when updates are waiting and opens or focuses Update Central on click.
+- **Omarchy menu bar widget** — included in [`bar-plugin/`](bar-plugin/) (`marciobbj.omapkg`). Lights up with an accent indicator when updates are waiting and opens or focuses Omapkg on click.
 - **Headless CLI** — scriptable `list`, `updates`, and `summary` commands with `--json` output.
 
 ## Keyboard Shortcuts
@@ -34,7 +34,7 @@ Native Qt Quick package and application manager for **Omarchy 4.5** — inspect 
 ## Build, Test & Install
 
 ```sh
-./bin/build      # Compile with qmake6 + make into build/omarchy-update-central
+./bin/build      # Compile with qmake6 + make into build/omapkg
 ./bin/test       # Build and run the Qt Test suite offscreen
 ./bin/install    # Build and install the Arch package (binary, icon, .desktop)
 ```
@@ -42,9 +42,9 @@ Native Qt Quick package and application manager for **Omarchy 4.5** — inspect 
 ## Headless CLI
 
 ```sh
-omarchy-update-central summary --json
-omarchy-update-central updates --json
-omarchy-update-central list --json
+omapkg summary --json
+omapkg updates --json
+omapkg list --json
 ```
 
 ## Omarchy Menu Bar Widget
@@ -53,12 +53,12 @@ To enable the menu bar update indicator:
 
 1. Symlink `bar-plugin` into your Omarchy plugins directory:
    ```sh
-   ln -s /home/io/workspace/omarchy-update-central/bar-plugin ~/.config/omarchy/plugins/local.omarchy-update-central
+   ln -s /path/to/omapkg/bar-plugin ~/.config/omarchy/plugins/marciobbj.omapkg
    ```
-2. Add `{"id": "local.omarchy-update-central"}` to `bar.layout.right` in `~/.config/omarchy/shell.json`.
+2. Add `{"id": "marciobbj.omapkg"}` to `bar.layout.right` in `~/.config/omarchy/shell.json`.
 3. Reload the shell with `omarchy-restart-shell`.
 
-Left-click opens or focuses Update Central; middle-click forces an immediate update check. Update Central also notifies the bar widget via `omarchy-shell local.omarchy-update-central refresh` whenever an update check or package operation finishes.
+Left-click opens or focuses Omapkg; middle-click forces an immediate update check. Omapkg also notifies the bar widget via `omarchy-shell marciobbj.omapkg refresh` whenever an update check or package operation finishes.
 
 ## License
 

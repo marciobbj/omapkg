@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "local.omarchy-update-central",
-  "name": "Update Central",
+  "id": "marciobbj.omapkg",
+  "name": "Omapkg",
   "version": "0.1.0",
-  "author": "Omarchy Update Central",
+  "author": "Marcio Bernardes",
   "license": "MIT",
-  "description": "Indicates available updates across Omarchy, Pacman, AUR, and Flatpak and opens Update Central",
+  "description": "Indicates available updates across Omarchy, Pacman, AUR, and Flatpak and opens Omapkg",
   "kinds": [
     "bar-widget"
   ],
@@ -13,8 +13,8 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Update Central",
-    "description": "Shows an indicator when package updates are available and opens Update Central on click",
+    "displayName": "Omapkg",
+    "description": "Shows an indicator when package updates are available and opens Omapkg on click",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right"

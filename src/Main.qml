@@ -10,7 +10,7 @@ ApplicationWindow {
     minimumWidth: 820
     minimumHeight: 540
     visible: true
-    title: qsTr("Update Central")
+    title: "Omapkg"
     color: theme.darkerBackground
 
     Material.theme: theme.isLight ? Material.Light : Material.Dark
@@ -281,7 +281,7 @@ ApplicationWindow {
                         spacing: 2
 
                         Text {
-                            text: qsTr("Update Central")
+                            text: "Omapkg"
                             color: theme.brightForeground
                             font.pixelSize: 18
                             font.bold: true
