@@ -33,7 +33,7 @@ BarWidget {
   }
 
   function openApp() {
-    Quickshell.execDetached([root.helperPath, "open"])
+    Util.execArgv([root.helperPath, "open"])
   }
 
   function localizedTooltip() {
@@ -115,10 +115,10 @@ BarWidget {
     slotSize: Style.bar.statusSlot
     active: root.updateCount > 0
     useActiveColor: true
+    pressFeedbackButtons: Qt.LeftButton
     tooltipText: root.localizedTooltip()
     onPressed: function(b) {
-      if (b === Qt.MiddleButton) root.refresh()
-      else root.openApp()
+      if (b === Qt.LeftButton) root.openApp()
     }
   }
 

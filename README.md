@@ -6,7 +6,7 @@ Omarchy menu bar update indicator (`marciobbj.omapkg`) and native Qt Quick packa
 
 ## Features
 
-- **Omarchy menu bar widget (`marciobbj.omapkg`)** — checks installed sources for waiting updates, lights up with an accent badge when updates are available, and opens or focuses Omapkg on click (middle-click forces an immediate check).
+- **Omarchy menu bar widget (`marciobbj.omapkg`)** — checks installed sources for waiting updates, lights up with an accent badge when updates are available, and opens or focuses Omapkg on click.
 - **Unified package sources** — Omarchy (`[omarchy]`), Pacman (`core`/`extra`/`multilib`/custom repos), AUR (`yay`), and Flatpak (automatically detected).
 - **Disk usage analytics** — stacked breakdown bar per source, per-app disk usage readout, sort by largest packages, and orphan disk reclaim summary.
 - **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`), route Omarchy and Pacman system updates through Omarchy's full `omarchy-update` flow (avoiding partial upgrades), update Flatpak apps and up-to-date AUR packages, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
@@ -80,7 +80,6 @@ If you installed the desktop app into `~/.local` manually instead of via `pacman
 ### Bar Widget
 
 - **Left-click** — Open or focus Omapkg (or offer to build/install it on first run)
-- **Middle-click** — Force an immediate update check
 - **IPC refresh** — `omarchy-shell marciobbj.omapkg refresh` (called automatically by Omapkg after update checks and package actions)
 
 ### Desktop App
