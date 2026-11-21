@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "marciobbj.omapkg",
   "name": "Omapkg",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Marcio Bernardes",
   "license": "MIT",
   "homepage": "https://github.com/marciobbj/omapkg",
-  "description": "Indicates available updates across Omarchy, Pacman, AUR, and Flatpak and opens Omapkg",
+  "description": "Indicates available updates across Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, and Mise and opens Omapkg",
   "kinds": [
     "bar-widget"
   ],

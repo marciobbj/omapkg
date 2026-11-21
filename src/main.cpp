@@ -1,4 +1,4 @@
-// omapkg — manage installed Omarchy, Pacman, AUR, and Flatpak apps.
+// omapkg — manage installed Omarchy, Pacman, AUR, Flatpak, Omarchy Plugin, and Mise packages.
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -23,7 +23,7 @@ int runCli(int argc, char *argv[], const QString &command) {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     app.setApplicationName("omapkg");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion("0.2.0");
 
     bool asJson = false;
     for (int i = 2; i < argc; ++i)
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("omapkg");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion("0.2.0");
 
     // Matches the window to omapkg.desktop so the compositor
     // (Wayland app_id) and app launcher pick up the installed icon.
