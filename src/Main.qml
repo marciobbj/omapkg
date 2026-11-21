@@ -56,6 +56,16 @@ ApplicationWindow {
         }
     }
 
+    function sourceLabel(src) {
+        if (src === "omarchy") return qsTr("Omarchy")
+        if (src === "pacman") return qsTr("Pacman")
+        if (src === "aur") return qsTr("AUR")
+        if (src === "flatpak") return qsTr("Flatpak")
+        if (src === "omarchy-plugin") return qsTr("Omarchy Plugin")
+        if (src === "mise") return qsTr("Mise")
+        return src || ""
+    }
+
     function promptRemove(pkgId) {
         var pkg = backend.packages.getById(pkgId)
         if (!pkg || !pkg.pkgId)
@@ -65,7 +75,7 @@ ApplicationWindow {
         confirmDialog.titleText = qsTr("Remove %1?").arg(pkg.displayName)
         confirmDialog.bodyText = qsTr("This will uninstall %1 (%2) and free %3 of disk space.")
             .arg(pkg.name)
-            .arg(pkg.source.toUpperCase())
+            .arg(sourceLabel(pkg.source))
             .arg(translator.formatBytes(pkg.sizeBytes || 0))
 
         var warnings = []
@@ -253,6 +263,24 @@ ApplicationWindow {
         enabled: !win.typingInSearch && !win.modalOpen && (backend.hasFlatpak || backend.packages.flatpakCount > 0)
         onActivated: backend.packages.filterSource = "flatpak"
     }
+    Shortcut {
+        sequence: "7"
+        context: Qt.ApplicationShortcut
+        enabled: !win.typingInSearch && !win.modalOpen && (backend.hasPlugins || backend.packages.pluginCount > 0)
+        onActivated: backend.packages.filterSource = "omarchy-plugin"
+    }
+    Shortcut {
+        sequence: "8"
+        context: Qt.ApplicationShortcut
+        enabled: !win.typingInSearch && !win.modalOpen && (backend.hasMise || backend.packages.miseCount > 0)
+        onActivated: backend.packages.filterSource = "mise"
+    }
+    Shortcut {
+        sequence: "9"
+        context: Qt.ApplicationShortcut
+        enabled: !win.typingInSearch && !win.modalOpen && backend.packages.orphanCount > 0
+        onActivated: backend.packages.filterSource = "orphans"
+    }
 
     // Right-to-left languages mirror the window; Translator sets the layout direction.
     Item {
@@ -399,7 +427,7 @@ ApplicationWindow {
             // Segmented Disk Usage Breakdown Bar.
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 42
+                Layout.preferredHeight: Math.max(42, legendFlow.implicitHeight + 20)
                 color: theme.background
                 clip: true
 
@@ -411,8 +439,9 @@ ApplicationWindow {
 
                     // Segmented bar.
                     Rectangle {
-                        Layout.preferredWidth: Math.min(220, Math.max(72, win.width * 0.16))
+                        Layout.preferredWidth: Math.min(180, Math.max(64, win.width * 0.14))
                         Layout.preferredHeight: 8
+                        Layout.alignment: Qt.AlignVCenter
                         radius: Math.min(4, theme.radius)
                         color: theme.darkBackground
                         clip: true
@@ -441,53 +470,70 @@ ApplicationWindow {
                                 width: parent.width * (backend.packages.flatpakBytes / parent.total)
                                 color: theme.cyan
                             }
+                            Rectangle {
+                                height: parent.height
+                                width: parent.width * (backend.packages.pluginBytes / parent.total)
+                                color: theme.yellow
+                            }
+                            Rectangle {
+                                height: parent.height
+                                width: parent.width * (backend.packages.miseBytes / parent.total)
+                                color: theme.green
+                            }
                         }
                     }
 
                     // Clickable legend items.
-                    Repeater {
-                        model: [
-                            { id: "omarchy", label: qsTr("Omarchy"), color: theme.accent, bytes: backend.packages.omarchyBytes, show: true },
-                            { id: "pacman", label: qsTr("Pacman"), color: theme.blue, bytes: backend.packages.pacmanBytes, show: true },
-                            { id: "aur", label: qsTr("AUR"), color: theme.magenta, bytes: backend.packages.aurBytes, show: true },
-                            { id: "flatpak", label: qsTr("Flatpak"), color: theme.cyan, bytes: backend.packages.flatpakBytes, show: backend.hasFlatpak || backend.packages.flatpakCount > 0 }
-                        ]
+                    Flow {
+                        id: legendFlow
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                        spacing: 12
 
-                        delegate: Row {
-                            visible: modelData.show
-                            spacing: 5
+                        Repeater {
+                            model: [
+                                { id: "omarchy", label: qsTr("Omarchy"), color: theme.accent, bytes: backend.packages.omarchyBytes, show: true },
+                                { id: "pacman", label: qsTr("Pacman"), color: theme.blue, bytes: backend.packages.pacmanBytes, show: true },
+                                { id: "aur", label: qsTr("AUR"), color: theme.magenta, bytes: backend.packages.aurBytes, show: true },
+                                { id: "flatpak", label: qsTr("Flatpak"), color: theme.cyan, bytes: backend.packages.flatpakBytes, show: backend.hasFlatpak || backend.packages.flatpakCount > 0 },
+                                { id: "omarchy-plugin", label: qsTr("Omarchy Plugins"), color: theme.yellow, bytes: backend.packages.pluginBytes, show: backend.hasPlugins || backend.packages.pluginCount > 0 },
+                                { id: "mise", label: qsTr("Mise"), color: theme.green, bytes: backend.packages.miseBytes, show: backend.hasMise || backend.packages.miseCount > 0 }
+                            ]
 
-                            Rectangle {
-                                width: 8
-                                height: 8
-                                radius: 4
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: modelData.color
-                            }
+                            delegate: Row {
+                                visible: modelData.show
+                                spacing: 5
 
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: {
-                                    void translator.language
-                                    return modelData.label + " " + translator.formatBytes(modelData.bytes)
+                                Rectangle {
+                                    width: 8
+                                    height: 8
+                                    radius: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: modelData.color
                                 }
-                                color: backend.packages.filterSource === modelData.id
-                                       ? theme.brightForeground
-                                       : theme.darkForeground
-                                font.pixelSize: 12
-                                font.weight: backend.packages.filterSource === modelData.id ? Font.DemiBold : Font.Normal
 
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: backend.packages.filterSource =
-                                        backend.packages.filterSource === modelData.id ? "all" : modelData.id
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: {
+                                        void translator.language
+                                        return modelData.label + " " + translator.formatBytes(modelData.bytes)
+                                    }
+                                    color: backend.packages.filterSource === modelData.id
+                                           ? theme.brightForeground
+                                           : theme.darkForeground
+                                    font.pixelSize: 12
+                                    font.weight: backend.packages.filterSource === modelData.id ? Font.DemiBold : Font.Normal
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: backend.packages.filterSource =
+                                            backend.packages.filterSource === modelData.id ? "all" : modelData.id
+                                    }
                                 }
                             }
                         }
                     }
-
-                    Item { Layout.fillWidth: true }
                 }
 
                 Rectangle {
@@ -588,6 +634,8 @@ ApplicationWindow {
                                 { id: "pacman", label: qsTr("Pacman"), count: backend.packages.pacmanCount, dot: theme.blue, show: true },
                                 { id: "aur", label: qsTr("AUR"), count: backend.packages.aurCount, dot: theme.magenta, show: true },
                                 { id: "flatpak", label: qsTr("Flatpak"), count: backend.packages.flatpakCount, dot: theme.cyan, show: backend.hasFlatpak || backend.packages.flatpakCount > 0 },
+                                { id: "omarchy-plugin", label: qsTr("Omarchy Plugins"), count: backend.packages.pluginCount, dot: theme.yellow, show: backend.hasPlugins || backend.packages.pluginCount > 0 },
+                                { id: "mise", label: qsTr("Mise"), count: backend.packages.miseCount, dot: theme.green, show: backend.hasMise || backend.packages.miseCount > 0 },
                                 { id: "orphans", label: qsTr("Orphans"), count: backend.packages.orphanCount, dot: theme.orange, show: backend.packages.orphanCount > 0 }
                             ]
 
@@ -889,7 +937,7 @@ ApplicationWindow {
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 visible: !backend.loading && backend.packages.filterSource === "updates"
-                                text: qsTr("Press R anytime to check Omarchy, Pacman, AUR, and Flatpak again.")
+                                text: qsTr("Press R anytime to check all package sources again.")
                                 color: theme.darkForeground
                                 font.pixelSize: 12
                             }

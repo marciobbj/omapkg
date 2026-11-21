@@ -64,7 +64,9 @@ void PackageModel::setPackages(QVector<PackageItem> packages) {
 
 void PackageModel::applyUpdates(const QHash<QString, QString> &pacmanAndOmarchyUpdates,
                                 const QHash<QString, QString> &aurUpdates,
-                                const QHash<QString, QString> &flatpakUpdates) {
+                                const QHash<QString, QString> &flatpakUpdates,
+                                const QHash<QString, QString> &pluginUpdates,
+                                const QHash<QString, QString> &miseUpdates) {
     for (auto &pkg : m_all) {
         pkg.hasUpdate = false;
         pkg.availableVersion.clear();
@@ -78,6 +80,12 @@ void PackageModel::applyUpdates(const QHash<QString, QString> &pacmanAndOmarchyU
         } else if (pkg.source == "flatpak" && flatpakUpdates.contains(pkg.name)) {
             pkg.hasUpdate = true;
             pkg.availableVersion = flatpakUpdates.value(pkg.name);
+        } else if (pkg.source == "omarchy-plugin" && pluginUpdates.contains(pkg.name)) {
+            pkg.hasUpdate = true;
+            pkg.availableVersion = pluginUpdates.value(pkg.name);
+        } else if (pkg.source == "mise" && miseUpdates.contains(pkg.name)) {
+            pkg.hasUpdate = true;
+            pkg.availableVersion = miseUpdates.value(pkg.name);
         }
     }
     rebuild();
@@ -174,12 +182,16 @@ void PackageModel::rebuild() {
     m_pacmanCount = 0;
     m_aurCount = 0;
     m_flatpakCount = 0;
+    m_pluginCount = 0;
+    m_miseCount = 0;
     m_orphanCount = 0;
     m_totalBytes = 0;
     m_omarchyBytes = 0;
     m_pacmanBytes = 0;
     m_aurBytes = 0;
     m_flatpakBytes = 0;
+    m_pluginBytes = 0;
+    m_miseBytes = 0;
     m_orphanBytes = 0;
 
     const QString needle = m_searchQuery.trimmed().toLower();
@@ -196,7 +208,8 @@ void PackageModel::rebuild() {
             m_orphanBytes += pkg.sizeBytes;
         }
 
-        const bool inScope = m_showDependencies || pkg.explicitInstall || pkg.source == "flatpak";
+        const bool inScope = m_showDependencies || pkg.explicitInstall
+                             || pkg.source == "flatpak" || pkg.source == "omarchy-plugin" || pkg.source == "mise";
         if (inScope) {
             ++m_scopeCount;
             m_totalBytes += pkg.sizeBytes;
@@ -212,6 +225,12 @@ void PackageModel::rebuild() {
             } else if (pkg.source == "flatpak") {
                 ++m_flatpakCount;
                 m_flatpakBytes += pkg.sizeBytes;
+            } else if (pkg.source == "omarchy-plugin") {
+                ++m_pluginCount;
+                m_pluginBytes += pkg.sizeBytes;
+            } else if (pkg.source == "mise") {
+                ++m_miseCount;
+                m_miseBytes += pkg.sizeBytes;
             }
         }
 

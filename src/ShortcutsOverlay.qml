@@ -69,7 +69,7 @@ Rectangle {
                         { key: "U", desc: qsTr("Update all outdated packages") },
                         { key: "R", desc: qsTr("Refresh list and check updates") },
                         { key: "Delete", desc: qsTr("Remove selected package") },
-                        { key: "1 – 6", desc: qsTr("Switch package source filter") },
+                        { key: "1 – 9", desc: qsTr("Switch package source filter") },
                         { key: "L", desc: qsTr("Toggle activity log") },
                         { key: "?", desc: qsTr("Show or hide shortcuts") },
                         { key: "Esc", desc: qsTr("Clear search or close dialog") },

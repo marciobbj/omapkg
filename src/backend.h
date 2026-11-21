@@ -2,6 +2,7 @@
 
 #include <QHash>
 #include <QJsonObject>
+#include <QMap>
 #include <QObject>
 #include <QProcess>
 #include <QQueue>
@@ -24,6 +25,38 @@ struct QueuedCommand {
     QString label;
     bool stripGoEnv = false;
     bool forceCLocale = false;
+    QMap<QString, QString> extraEnv = {};
+    QString workingDirectory = {};
+
+    QueuedCommand() = default;
+    QueuedCommand(QString prog, QStringList args, QString lbl,
+                  bool stripGo = false, bool forceC = false,
+                  QMap<QString, QString> env = {}, QString cwd = {})
+        : program(std::move(prog)),
+          arguments(std::move(args)),
+          label(std::move(lbl)),
+          stripGoEnv(stripGo),
+          forceCLocale(forceC),
+          extraEnv(std::move(env)),
+          workingDirectory(std::move(cwd)) {}
+};
+
+struct PluginMeta {
+    QString dirPath;
+    QString author;
+    QString license;
+    QStringList kinds;
+    bool enabled = false;
+    bool isGit = false;
+    QString localHead;
+    QString remoteUrl;
+};
+
+struct MiseToolMeta {
+    QString configPath;
+    QString requestedVersion;
+    QString activeInstallPath;
+    QStringList installedVersions;
 };
 
 struct SystemUpdateLaunch {
@@ -36,6 +69,8 @@ enum class PackageUpdateStrategy {
     OmarchyFullUpdate,
     AurPackageUpdate,
     FlatpakPackageUpdate,
+    PluginPackageUpdate,
+    MisePackageUpdate,
 };
 
 class Backend : public QObject {
@@ -52,6 +87,8 @@ class Backend : public QObject {
     Q_PROPERTY(qint64 lastCheckedEpoch READ lastCheckedEpoch NOTIFY stateChanged)
     Q_PROPERTY(bool hasYay READ hasYay CONSTANT)
     Q_PROPERTY(bool hasFlatpak READ hasFlatpak CONSTANT)
+    Q_PROPERTY(bool hasPlugins READ hasPlugins CONSTANT)
+    Q_PROPERTY(bool hasMise READ hasMise CONSTANT)
     Q_PROPERTY(bool hasCheckupdates READ hasCheckupdates CONSTANT)
     Q_PROPERTY(QVariantMap selectedDetails READ selectedDetails NOTIFY detailsChanged)
     Q_PROPERTY(bool loadingDetails READ loadingDetails NOTIFY detailsChanged)
@@ -72,6 +109,8 @@ public:
     qint64 lastCheckedEpoch() const { return m_lastCheckedEpoch; }
     bool hasYay() const { return !m_yayPath.isEmpty(); }
     bool hasFlatpak() const { return !m_flatpakPath.isEmpty(); }
+    bool hasPlugins() const { return !m_pluginsDir.isEmpty(); }
+    bool hasMise() const { return !m_misePath.isEmpty(); }
     bool hasCheckupdates() const { return !m_checkupdatesPath.isEmpty(); }
     QVariantMap selectedDetails() const { return m_selectedDetails; }
     bool loadingDetails() const { return m_loadingDetails; }
@@ -102,6 +141,17 @@ public:
     static qint64 parseSizeBytes(const QString &humanSize);
     static QVariantMap parsePacmanDetails(const QString &output);
     static QVariantMap parseFlatpakDetails(const QString &output);
+    static QHash<QString, qint64> parseDuSizes(const QString &output);
+    static QString normalizeGitRemoteUrl(const QString &rawUrl);
+    static QString parsePluginRemoteHead(const QString &lsRemoteOutput);
+    static QVector<PackageItem> parseOmarchyPlugins(const QString &pluginsDir,
+                                                    const QString &listJson,
+                                                    const QHash<QString, qint64> &dirSizes = {},
+                                                    QHash<QString, PluginMeta> *metaOut = nullptr);
+    static QVector<PackageItem> parseMiseInstalled(const QString &jsonOutput,
+                                                   const QHash<QString, qint64> &dirSizes = {},
+                                                   QHash<QString, MiseToolMeta> *metaOut = nullptr);
+    static QHash<QString, QString> parseMiseOutdated(const QString &jsonOutput);
     static QHash<QString, DesktopEntryInfo> scanDesktopEntries(const QStringList &directories);
     static PackageUpdateStrategy planPackageUpdate(const QString &source, bool hasPendingSystemUpdates);
     static SystemUpdateLaunch resolveOmarchyUpdateLaunch(const QString &omarchyTerminalPath,
@@ -132,11 +182,18 @@ private:
     QString m_checkupdatesPath;
     QString m_yayPath;
     QString m_flatpakPath;
+    QString m_misePath;
+    QString m_gitPath;
+    QString m_duPath;
     QString m_pkexecPath;
     QString m_omarchyDefaultsPath;
     QString m_omarchyUpdatePath;
     QString m_omarchyTerminalPath;
     QString m_xdgTerminalPath;
+    QString m_omarchyPluginListPath;
+    QString m_omarchyPluginUpdatePath;
+    QString m_omarchyPluginRemovePath;
+    QString m_pluginsDir;
     QString m_gtkLaunchPath;
 
     bool m_loading = false;
@@ -147,13 +204,21 @@ private:
     QString m_orphansOut;
     QString m_defaultsOut;
     QString m_flatpakListOut;
+    QString m_pluginListOut;
+    QString m_miseListOut;
+    QString m_duOut;
 
     bool m_checkingUpdates = false;
     int m_pendingUpdateTasks = 0;
     QHash<QString, QString> m_pacmanUpdates;
     QHash<QString, QString> m_aurUpdates;
     QHash<QString, QString> m_flatpakUpdates;
+    QHash<QString, QString> m_pluginUpdates;
+    QHash<QString, QString> m_miseUpdates;
     qint64 m_lastCheckedEpoch = 0;
+
+    QHash<QString, PluginMeta> m_pluginMeta;
+    QHash<QString, MiseToolMeta> m_miseMeta;
 
     bool m_busy = false;
     bool m_lastOperationSucceeded = true;

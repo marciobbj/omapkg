@@ -22,6 +22,8 @@ Rectangle {
         if (src === "pacman") return theme.blue
         if (src === "aur") return theme.magenta
         if (src === "flatpak") return theme.cyan
+        if (src === "omarchy-plugin") return theme.yellow
+        if (src === "mise") return theme.green
         return theme.muted
     }
 
@@ -30,6 +32,8 @@ Rectangle {
         if (src === "pacman") return qsTr("Pacman")
         if (src === "aur") return qsTr("AUR")
         if (src === "flatpak") return qsTr("Flatpak")
+        if (src === "omarchy-plugin") return qsTr("Omarchy Plugin")
+        if (src === "mise") return qsTr("Mise")
         return src || ""
     }
 
@@ -369,15 +373,55 @@ Rectangle {
                         font.pixelSize: 12
                     }
 
-                    Text { text: qsTr("Reason"); color: theme.darkForeground; font.pixelSize: 12 }
+                    Text {
+                        text: root.pkg.source === "omarchy-plugin" ? qsTr("Status") : qsTr("Reason")
+                        color: theme.darkForeground
+                        font.pixelSize: 12
+                    }
                     Text {
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
-                        text: root.pkg.isOrphan
-                              ? qsTr("Unused orphan")
-                              : (root.pkg.explicitInstall ? qsTr("Explicitly installed") : qsTr("Dependency"))
-                        color: root.pkg.isOrphan ? theme.orange : theme.foreground
+                        text: root.pkg.source === "omarchy-plugin"
+                              ? (root.details && root.details.pluginEnabled ? qsTr("Enabled") : qsTr("Disabled"))
+                              : (root.pkg.isOrphan
+                                 ? qsTr("Unused orphan")
+                                 : (root.pkg.explicitInstall ? qsTr("Explicitly installed") : qsTr("Dependency")))
+                        color: root.pkg.source === "omarchy-plugin"
+                               ? (root.details && root.details.pluginEnabled ? theme.green : theme.darkForeground)
+                               : (root.pkg.isOrphan ? theme.orange : theme.foreground)
                         font.pixelSize: 12
+                    }
+
+                    Text {
+                        visible: Boolean(root.pkg.source === "omarchy-plugin" && root.details && root.details.packager && root.details.packager.length > 0)
+                        text: qsTr("Author")
+                        color: theme.darkForeground
+                        font.pixelSize: 12
+                    }
+                    Text {
+                        visible: Boolean(root.pkg.source === "omarchy-plugin" && root.details && root.details.packager && root.details.packager.length > 0)
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignRight
+                        text: root.details && root.details.packager ? root.details.packager : ""
+                        color: theme.foreground
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        visible: Boolean(root.pkg.source === "mise" && root.details && root.details.configPath && root.details.configPath.length > 0)
+                        text: qsTr("Config")
+                        color: theme.darkForeground
+                        font.pixelSize: 12
+                    }
+                    Text {
+                        visible: Boolean(root.pkg.source === "mise" && root.details && root.details.configPath && root.details.configPath.length > 0)
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignRight
+                        text: root.details && root.details.configPath ? root.details.configPath : ""
+                        color: theme.foreground
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
                     }
 
                     Text {
@@ -418,6 +462,48 @@ Rectangle {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: Qt.openUrlExternally(root.pkg.url)
+                        }
+                    }
+                }
+            }
+
+            // Installed versions section (for Mise packages).
+            ColumnLayout {
+                visible: Boolean(root.details && root.details.installedVersions && root.details.installedVersions.length > 0)
+                Layout.fillWidth: true
+                spacing: 6
+
+                Text {
+                    text: qsTr("Installed versions (%1)").arg(root.details.installedVersions ? root.details.installedVersions.length : 0)
+                    color: theme.darkForeground
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 5
+
+                    Repeater {
+                        model: root.details.installedVersions ? root.details.installedVersions.slice(0, 18) : []
+                        delegate: Rectangle {
+                            height: 22
+                            width: verText.implicitWidth + 12
+                            radius: Math.min(4, theme.radius)
+                            color: modelData === root.pkg.version
+                                   ? Qt.rgba(Qt.color(theme.green).r, Qt.color(theme.green).g, Qt.color(theme.green).b, 0.18)
+                                   : theme.background
+                            border.width: 1
+                            border.color: modelData === root.pkg.version ? theme.green : theme.selection
+
+                            Text {
+                                id: verText
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: modelData === root.pkg.version ? theme.green : theme.foreground
+                                font.pixelSize: 11
+                                font.bold: modelData === root.pkg.version
+                            }
                         }
                     }
                 }

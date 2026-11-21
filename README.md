@@ -1,15 +1,15 @@
 # Omapkg
 
-Omarchy menu bar update indicator (`marciobbj.omapkg`) and native Qt Quick package & application manager for **Omarchy 4.5** — inspect disk usage, browse installed apps across **Omarchy**, **Pacman**, **AUR**, and **Flatpak**, apply updates, remove packages, and clean unused orphans, all following your active Omarchy theme and language live.
+Omarchy menu bar update indicator (`marciobbj.omapkg`) and native Qt Quick package & application manager for **Omarchy 4.5** — inspect disk usage, browse installed apps and tools across **Omarchy**, **Pacman**, **AUR**, **Flatpak**, **Omarchy Plugins**, and **Mise**, apply updates, remove packages, and clean unused orphans, all following your active Omarchy theme and language live.
 
 ![Omapkg](preview.png)
 
 ## Features
 
 - **Omarchy menu bar widget (`marciobbj.omapkg`)** — checks installed sources for waiting updates, lights up with an accent badge when updates are available, and opens or focuses Omapkg on click.
-- **Unified package sources** — Omarchy (`[omarchy]`), Pacman (`core`/`extra`/`multilib`/custom repos), AUR (`yay`), and Flatpak (automatically detected).
+- **Unified package sources** — Omarchy (`[omarchy]`), Pacman (`core`/`extra`/`multilib`/custom repos), AUR (`yay`), Flatpak, **Omarchy Plugins** (`~/.config/omarchy/plugins`), and **Mise** (`mise` dev tools) — automatically detected.
 - **Disk usage analytics** — stacked breakdown bar per source, per-app disk usage readout, sort by largest packages, and orphan disk reclaim summary.
-- **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`), route Omarchy and Pacman system updates through Omarchy's full `omarchy-update` flow (avoiding partial upgrades), update Flatpak apps and up-to-date AUR packages, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
+- **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`, `git ls-remote` for Omarchy Plugins, `mise outdated --json`), route Omarchy and Pacman system updates through Omarchy's full `omarchy-update` flow (avoiding partial upgrades), update Flatpak apps, Omarchy Plugins (`omarchy-plugin-update`), Mise tools (`mise upgrade`), and up-to-date AUR packages, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
 - **Live Omarchy theme & Hyprland rounding** — watches `~/.local/state/omarchy/current/theme/colors.toml` and `hyprctl decoration:rounding` live.
 - **All 50 Omarchy 4.5 languages** — watches `~/.config/omarchy/language` live with CLDR plurals, localized disk sizes/dates/numbers, and RTL layout mirroring.
 - **Headless CLI** — scriptable `list`, `updates`, and `summary` commands with `--json` output.
@@ -68,6 +68,8 @@ If you installed the desktop app into `~/.local` manually instead of via `pacman
 
 - `yay` — AUR package updates and management
 - `flatpak` — Flatpak application updates and management
+- `mise` — Mise runtime & dev tool updates and management
+- `git` — Git-managed Omarchy Plugin update checks
 
 ## Configuration & Permissions
 
@@ -93,7 +95,7 @@ If you installed the desktop app into `~/.local` manually instead of via `pacman
 | `Ctrl+R` / `F5` | Refresh packages and check for updates |
 | `Delete` / `Backspace` | Remove selected package |
 | `Ctrl+Shift+O` | Clean unused orphan packages |
-| `1` – `7` | Switch source tabs (All, Updates, Omarchy, Pacman, AUR, Flatpak, Orphans) |
+| `1` – `9` | Switch source tabs (All, Updates, Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, Mise, Orphans) |
 | `L` | Toggle activity log drawer |
 | `?` | Show or hide keyboard shortcuts |
 | `Esc` | Close overlay or clear search |

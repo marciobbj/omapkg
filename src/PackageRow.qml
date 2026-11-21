@@ -34,6 +34,8 @@ Item {
         if (src === "pacman") return theme.blue
         if (src === "aur") return theme.magenta
         if (src === "flatpak") return theme.cyan
+        if (src === "omarchy-plugin") return theme.yellow
+        if (src === "mise") return theme.green
         return theme.muted
     }
 
@@ -42,6 +44,8 @@ Item {
         if (src === "pacman") return qsTr("Pacman")
         if (src === "aur") return qsTr("AUR")
         if (src === "flatpak") return qsTr("Flatpak")
+        if (src === "omarchy-plugin") return qsTr("Omarchy Plugin")
+        if (src === "mise") return qsTr("Mise")
         return src
     }
 

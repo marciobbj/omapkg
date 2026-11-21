@@ -207,6 +207,98 @@ private slots:
         QCOMPARE(details.value("dependsOn").toStringList(),
                  QStringList({"qt6-base", "qt6-declarative", "hyprland"}));
         QCOMPARE(details.value("requiredBy").toStringList(), QStringList());
+
+        // du -sb parser and git URL / ls-remote helpers
+        const auto duSizes = Backend::parseDuSizes(
+            "1261369\t/tmp/plugins/demo.plugin/\n"
+            "1746720127\t/tmp/mise/installs/node\n");
+        QCOMPARE(duSizes.value("/tmp/plugins/demo.plugin"), 1261369LL);
+        QCOMPARE(duSizes.value("/tmp/mise/installs/node"), 1746720127LL);
+        QCOMPARE(Backend::normalizeGitRemoteUrl("git@github.com:marciobbj/omapkg.git"),
+                 QString("https://github.com/marciobbj/omapkg"));
+        QCOMPARE(Backend::normalizeGitRemoteUrl("https://github.com/omacom/demo.git"),
+                 QString("https://github.com/omacom/demo"));
+        QCOMPARE(Backend::parsePluginRemoteHead("0123456789abcdef0123456789abcdef01234567\tHEAD\n"),
+                 QString("0123456789abcdef0123456789abcdef01234567"));
+
+        // Omarchy plugins parser (skips reserved omarchy.* namespace and reads manifest.json)
+        QTemporaryDir pluginsTmp;
+        QVERIFY(pluginsTmp.isValid());
+        const QString pluginDir = pluginsTmp.filePath("acme.weather");
+        QVERIFY(QDir().mkpath(pluginDir));
+        {
+            QFile f(pluginDir + "/manifest.json");
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+            f.write(
+                "{\n"
+                "  \"schemaVersion\": 1,\n"
+                "  \"id\": \"acme.weather\",\n"
+                "  \"name\": \"Acme Weather\",\n"
+                "  \"version\": \"1.2.3\",\n"
+                "  \"author\": \"Acme\",\n"
+                "  \"license\": \"MIT\",\n"
+                "  \"homepage\": \"https://github.com/acme/weather\",\n"
+                "  \"description\": \"Weather bar widget\",\n"
+                "  \"kinds\": [\"bar-widget\"]\n"
+                "}\n");
+        }
+        const QString reservedDir = pluginsTmp.filePath("omarchy.reserved");
+        QVERIFY(QDir().mkpath(reservedDir));
+        {
+            QFile f(reservedDir + "/manifest.json");
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+            f.write("{\"schemaVersion\":1,\"id\":\"omarchy.reserved\",\"name\":\"Reserved\",\"version\":\"1.0\"}");
+        }
+        QHash<QString, PluginMeta> pluginMeta;
+        const QString pluginListJson =
+            "[\n"
+            "  {\"id\":\"acme.weather\",\"enabled\":true,\"firstParty\":false},\n"
+            "  {\"id\":\"omarchy.bar\",\"enabled\":true,\"firstParty\":true}\n"
+            "]\n";
+        const auto pluginItems = Backend::parseOmarchyPlugins(
+            pluginsTmp.path(), pluginListJson, {{QFileInfo(pluginDir).canonicalFilePath(), 4096}}, &pluginMeta);
+        QCOMPARE(pluginItems.size(), 1);
+        QCOMPARE(pluginItems[0].id, QString("omarchy-plugin:acme.weather"));
+        QCOMPARE(pluginItems[0].source, QString("omarchy-plugin"));
+        QCOMPARE(pluginItems[0].displayName, QString("Acme Weather"));
+        QCOMPARE(pluginItems[0].version, QString("1.2.3"));
+        QCOMPARE(pluginItems[0].repository, QString("bar-widget"));
+        QCOMPARE(pluginItems[0].sizeBytes, 4096LL);
+        QCOMPARE(pluginMeta.value("acme.weather").enabled, true);
+        QCOMPARE(pluginMeta.value("acme.weather").author, QString("Acme"));
+
+        // Mise installed & outdated parsers
+        const QString miseJson =
+            "{\n"
+            "  \"node\": [\n"
+            "    {\"version\": \"25.9.0\", \"install_path\": \"/tmp/mise/installs/node/25.9.0\", \"installed\": true, \"active\": false},\n"
+            "    {\"version\": \"26.13.1\", \"requested_version\": \"latest\", \"install_path\": \"/tmp/mise/installs/node/26.13.1\",\n"
+            "     \"source\": {\"type\": \"mise.toml\", \"path\": \"/home/test/.config/mise/config.toml\"},\n"
+            "     \"installed\": true, \"active\": true}\n"
+            "  ],\n"
+            "  \"uninstalled-tool\": [\n"
+            "    {\"version\": \"1.0.0\", \"installed\": false, \"active\": false}\n"
+            "  ]\n"
+            "}\n";
+        QHash<QString, MiseToolMeta> miseMeta;
+        const auto miseItems = Backend::parseMiseInstalled(
+            miseJson, {{"/tmp/mise/installs/node", 1746720127LL}}, &miseMeta);
+        QCOMPARE(miseItems.size(), 1);
+        QCOMPARE(miseItems[0].id, QString("mise:node"));
+        QCOMPARE(miseItems[0].source, QString("mise"));
+        QCOMPARE(miseItems[0].version, QString("26.13.1"));
+        QCOMPARE(miseItems[0].repository, QString("latest"));
+        QCOMPARE(miseItems[0].sizeBytes, 1746720127LL);
+        QCOMPARE(miseMeta.value("node").installedVersions, QStringList({"25.9.0", "26.13.1"}));
+        QCOMPARE(miseMeta.value("node").configPath, QString("/home/test/.config/mise/config.toml"));
+
+        const auto miseUpdates = Backend::parseMiseOutdated(
+            "{\n"
+            "  \"node\": {\"name\": \"node\", \"requested\": \"latest\", \"current\": \"26.13.1\", \"latest\": \"26.14.0\"},\n"
+            "  \"codex\": {\"name\": \"codex\", \"requested\": \"latest\", \"current\": \"0.171.0\", \"latest\": \"0.171.0\"}\n"
+            "}\n");
+        QCOMPARE(miseUpdates.size(), 1);
+        QCOMPARE(miseUpdates.value("node"), QString("26.14.0"));
     }
 
     void packageModelFilteringSortingAndStats() {
@@ -233,21 +325,27 @@ private slots:
             makePkg("pacman", "orphan-lib", 15'000'000, false, true, 75),
             makePkg("aur", "yay-bin", 10'000'000, true, false, 300),
             makePkg("flatpak", "com.stremio.Stremio", 300'000'000, true, false, 250),
+            makePkg("omarchy-plugin", "acme.weather", 2'000'000, true, false, 275),
+            makePkg("mise", "node", 100'000'000, true, false, 290),
         });
 
-        QCOMPARE(model.totalCount(), 6);
-        // Default: explicit only (omarchy 40M + firefox 250M + yay-bin 10M + stremio 300M = 600M)
+        QCOMPARE(model.totalCount(), 8);
+        // Default: explicit only (omarchy 40M + firefox 250M + yay-bin 10M + stremio 300M + plugin 2M + mise 100M = 702M)
         QCOMPARE(model.showDependencies(), false);
-        QCOMPARE(model.totalBytes(), 600'000'000LL);
+        QCOMPARE(model.totalBytes(), 702'000'000LL);
         QCOMPARE(model.omarchyBytes(), 40'000'000LL);
         QCOMPARE(model.pacmanBytes(), 250'000'000LL);
         QCOMPARE(model.aurBytes(), 10'000'000LL);
         QCOMPARE(model.flatpakBytes(), 300'000'000LL);
+        QCOMPARE(model.pluginBytes(), 2'000'000LL);
+        QCOMPARE(model.miseBytes(), 100'000'000LL);
+        QCOMPARE(model.pluginCount(), 1);
+        QCOMPARE(model.miseCount(), 1);
         QCOMPARE(model.orphanCount(), 1);
         QCOMPARE(model.orphanBytes(), 15'000'000LL);
 
         // Sorted by size descending
-        QCOMPARE(model.visibleCount(), 4);
+        QCOMPARE(model.visibleCount(), 6);
         QCOMPARE(model.get(0).value("name").toString(), QString("com.stremio.Stremio"));
         QCOMPARE(model.get(1).value("name").toString(), QString("firefox"));
 
@@ -256,30 +354,41 @@ private slots:
         QCOMPARE(model.visibleCount(), 1);
         QCOMPARE(model.get(0).value("name").toString(), QString("orphan-lib"));
 
-        // Apply updates including a dependency package (glibc)
+        // Apply updates including a dependency package (glibc), an Omarchy plugin, and a Mise package
         model.applyUpdates({{"glibc", "2.41-1"}, {"firefox", "134.0-1"}},
                            {{"yay-bin", "12.5.0-1"}},
-                           {{"com.stremio.Stremio", "4.4.169"}});
-        QCOMPARE(model.updatesCount(), 4);
+                           {{"com.stremio.Stremio", "4.4.169"}},
+                           {{"acme.weather", "a1b2c3d"}},
+                           {{"node", "26.14.0"}});
+        QCOMPARE(model.updatesCount(), 6);
 
-        // Updates tab shows ALL outdated packages (including glibc dependency)
+        // Updates tab shows ALL outdated packages (including glibc dependency, plugins, and mise)
         model.setFilterSource("updates");
-        QCOMPARE(model.visibleCount(), 4);
+        QCOMPARE(model.visibleCount(), 6);
 
         // Enabling showDependencies includes glibc + orphan-lib in scope totals
         model.setFilterSource("all");
         model.setShowDependencies(true);
-        QCOMPARE(model.visibleCount(), 6);
-        QCOMPARE(model.totalBytes(), 665'000'000LL);
+        QCOMPARE(model.visibleCount(), 8);
+        QCOMPARE(model.totalBytes(), 767'000'000LL);
         QCOMPARE(model.pacmanBytes(), 315'000'000LL);
         model.setSearchQuery("strem");
         QCOMPARE(model.visibleCount(), 1);
         QCOMPARE(model.get(0).value("source").toString(), QString("flatpak"));
 
-        // Sort by name
+        // Filter Omarchy Plugins and Mise tabs
         model.setSearchQuery("");
+        model.setFilterSource("omarchy-plugin");
+        QCOMPARE(model.visibleCount(), 1);
+        QCOMPARE(model.get(0).value("name").toString(), QString("acme.weather"));
+        model.setFilterSource("mise");
+        QCOMPARE(model.visibleCount(), 1);
+        QCOMPARE(model.get(0).value("name").toString(), QString("node"));
+        model.setFilterSource("all");
+
+        // Sort by name
         model.setSortBy("name");
-        QCOMPARE(model.get(0).value("name").toString(), QString("com.stremio.Stremio"));
+        QCOMPARE(model.get(0).value("name").toString(), QString("acme.weather"));
 
         // Sort by date descending
         model.setSortBy("date");
@@ -299,9 +408,13 @@ private slots:
         QCOMPARE(Backend::planPackageUpdate("aur", true), PackageUpdateStrategy::OmarchyFullUpdate);
         QCOMPARE(Backend::planPackageUpdate("aur", false), PackageUpdateStrategy::AurPackageUpdate);
 
-        // Flatpak apps are sandboxed and can always update independently.
+        // Flatpak apps, Omarchy plugins, and Mise packages can update independently.
         QCOMPARE(Backend::planPackageUpdate("flatpak", true), PackageUpdateStrategy::FlatpakPackageUpdate);
         QCOMPARE(Backend::planPackageUpdate("flatpak", false), PackageUpdateStrategy::FlatpakPackageUpdate);
+        QCOMPARE(Backend::planPackageUpdate("omarchy-plugin", true), PackageUpdateStrategy::PluginPackageUpdate);
+        QCOMPARE(Backend::planPackageUpdate("omarchy-plugin", false), PackageUpdateStrategy::PluginPackageUpdate);
+        QCOMPARE(Backend::planPackageUpdate("mise", true), PackageUpdateStrategy::MisePackageUpdate);
+        QCOMPARE(Backend::planPackageUpdate("mise", false), PackageUpdateStrategy::MisePackageUpdate);
 
         // Launch resolution prefers Omarchy's floating presentation terminal wrapper.
         const auto primary = Backend::resolveOmarchyUpdateLaunch(

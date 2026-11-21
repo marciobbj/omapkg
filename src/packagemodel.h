@@ -12,7 +12,7 @@ struct PackageItem {
     QString displayName;
     QString version;
     QString availableVersion;
-    QString source;       // "omarchy", "pacman", "aur", "flatpak"
+    QString source;       // "omarchy", "pacman", "aur", "flatpak", "omarchy-plugin", "mise"
     QString repository;   // "omarchy", "core", "extra", "multilib", "AUR", "flathub", ...
     QString description;
     QString url;
@@ -43,6 +43,8 @@ class PackageModel : public QAbstractListModel {
     Q_PROPERTY(int pacmanCount READ pacmanCount NOTIFY statsChanged)
     Q_PROPERTY(int aurCount READ aurCount NOTIFY statsChanged)
     Q_PROPERTY(int flatpakCount READ flatpakCount NOTIFY statsChanged)
+    Q_PROPERTY(int pluginCount READ pluginCount NOTIFY statsChanged)
+    Q_PROPERTY(int miseCount READ miseCount NOTIFY statsChanged)
     Q_PROPERTY(int orphanCount READ orphanCount NOTIFY statsChanged)
 
     Q_PROPERTY(qint64 totalBytes READ totalBytes NOTIFY statsChanged)
@@ -50,6 +52,8 @@ class PackageModel : public QAbstractListModel {
     Q_PROPERTY(qint64 pacmanBytes READ pacmanBytes NOTIFY statsChanged)
     Q_PROPERTY(qint64 aurBytes READ aurBytes NOTIFY statsChanged)
     Q_PROPERTY(qint64 flatpakBytes READ flatpakBytes NOTIFY statsChanged)
+    Q_PROPERTY(qint64 pluginBytes READ pluginBytes NOTIFY statsChanged)
+    Q_PROPERTY(qint64 miseBytes READ miseBytes NOTIFY statsChanged)
     Q_PROPERTY(qint64 orphanBytes READ orphanBytes NOTIFY statsChanged)
 
 public:
@@ -82,7 +86,9 @@ public:
     void setPackages(QVector<PackageItem> packages);
     void applyUpdates(const QHash<QString, QString> &pacmanAndOmarchyUpdates,
                       const QHash<QString, QString> &aurUpdates,
-                      const QHash<QString, QString> &flatpakUpdates);
+                      const QHash<QString, QString> &flatpakUpdates,
+                      const QHash<QString, QString> &pluginUpdates = {},
+                      const QHash<QString, QString> &miseUpdates = {});
 
     const QVector<PackageItem> &allPackages() const { return m_all; }
     const PackageItem *findById(const QString &id) const;
@@ -109,6 +115,8 @@ public:
     int pacmanCount() const { return m_pacmanCount; }
     int aurCount() const { return m_aurCount; }
     int flatpakCount() const { return m_flatpakCount; }
+    int pluginCount() const { return m_pluginCount; }
+    int miseCount() const { return m_miseCount; }
     int orphanCount() const { return m_orphanCount; }
 
     qint64 totalBytes() const { return m_totalBytes; }
@@ -116,6 +124,8 @@ public:
     qint64 pacmanBytes() const { return m_pacmanBytes; }
     qint64 aurBytes() const { return m_aurBytes; }
     qint64 flatpakBytes() const { return m_flatpakBytes; }
+    qint64 pluginBytes() const { return m_pluginBytes; }
+    qint64 miseBytes() const { return m_miseBytes; }
     qint64 orphanBytes() const { return m_orphanBytes; }
 
     Q_INVOKABLE QVariantMap get(int row) const;
@@ -146,6 +156,8 @@ private:
     int m_pacmanCount = 0;
     int m_aurCount = 0;
     int m_flatpakCount = 0;
+    int m_pluginCount = 0;
+    int m_miseCount = 0;
     int m_orphanCount = 0;
 
     qint64 m_totalBytes = 0;
@@ -153,5 +165,7 @@ private:
     qint64 m_pacmanBytes = 0;
     qint64 m_aurBytes = 0;
     qint64 m_flatpakBytes = 0;
+    qint64 m_pluginBytes = 0;
+    qint64 m_miseBytes = 0;
     qint64 m_orphanBytes = 0;
 };
