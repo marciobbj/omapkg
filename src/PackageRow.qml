@@ -18,6 +18,8 @@ Item {
     required property real sizeBytes
     required property bool hasUpdate
     required property bool isOrphan
+    required property bool hasSecurityAlert
+    required property string securitySeverity
     required property string iconName
 
     required property bool selected
@@ -164,6 +166,28 @@ Item {
                             anchors.centerIn: parent
                             text: root.sourceLabel(root.source)
                             color: root.sourceColor(root.source)
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+
+                    // Security advisory pill.
+                    Rectangle {
+                        visible: root.hasSecurityAlert
+                        height: 18
+                        Layout.preferredWidth: secTag.implicitWidth + 10
+                        Layout.minimumWidth: secTag.implicitWidth + 10
+                        radius: Math.min(4, theme.radius)
+                        color: Qt.rgba(Qt.color(theme.red).r, Qt.color(theme.red).g,
+                                       Qt.color(theme.red).b, 0.22)
+
+                        Text {
+                            id: secTag
+                            anchors.centerIn: parent
+                            text: root.securitySeverity.length > 0
+                                  ? qsTr("Security · %1").arg(root.securitySeverity.toUpperCase())
+                                  : qsTr("Security")
+                            color: theme.red
                             font.pixelSize: 10
                             font.bold: true
                         }

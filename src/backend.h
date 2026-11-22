@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QMap>
+#include <QNetworkAccessManager>
 #include <QObject>
 #include <QProcess>
 #include <QQueue>
@@ -78,6 +79,7 @@ class Backend : public QObject {
     Q_PROPERTY(QObject *packages READ packages CONSTANT)
     Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
     Q_PROPERTY(bool checkingUpdates READ checkingUpdates NOTIFY stateChanged)
+    Q_PROPERTY(bool checkingSecurity READ checkingSecurity NOTIFY stateChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY operationChanged)
     Q_PROPERTY(QString operationTitle READ operationTitle NOTIFY operationChanged)
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY operationChanged)
@@ -100,6 +102,7 @@ public:
     PackageModel *packages() { return &m_model; }
     bool loading() const { return m_loading; }
     bool checkingUpdates() const { return m_checkingUpdates; }
+    bool checkingSecurity() const { return m_checkingSecurity; }
     bool busy() const { return m_busy; }
     QString operationTitle() const { return m_operationTitle; }
     QString statusMessage() const { return m_statusMessage; }
@@ -117,6 +120,7 @@ public:
 
     Q_INVOKABLE void reloadPackages(bool checkForUpdatesAfter = true);
     Q_INVOKABLE void checkUpdates();
+    Q_INVOKABLE void checkSecurity(bool notifyOnNew = true);
     Q_INVOKABLE void updatePackage(const QString &pkgId);
     Q_INVOKABLE void updateAll();
     Q_INVOKABLE void removePackage(const QString &pkgId);
@@ -127,7 +131,7 @@ public:
     Q_INVOKABLE void launchApp(const QString &pkgId);
 
     // Synchronous snapshot helper used by the headless CLI commands.
-    QJsonObject runCliSnapshot(bool includeUpdates);
+    QJsonObject runCliSnapshot(bool includeUpdates, bool includeSecurity = false, bool notifySecurity = false);
 
     // Pure parsing and update-routing helpers exposed for unit testing.
     static QVector<PackageItem> parseExpacInstalled(const QString &output,
@@ -157,6 +161,10 @@ public:
     static SystemUpdateLaunch resolveOmarchyUpdateLaunch(const QString &omarchyTerminalPath,
                                                          const QString &omarchyUpdatePath,
                                                          const QString &xdgTerminalPath);
+    static SystemUpdateLaunch resolvePluginUpdateLaunch(const QString &omarchyTerminalPath,
+                                                        const QString &omarchyPluginUpdatePath,
+                                                        const QString &xdgTerminalPath,
+                                                        const QString &pluginId = {});
 
 signals:
     void stateChanged();
@@ -168,8 +176,10 @@ private:
     void startReloadStepFinished();
     void finalizePackageLoad();
     void finishUpdateCheckStep();
+    void finishSecurityCheckStep();
     bool hasPendingSystemUpdates() const;
     bool launchOmarchySystemUpdate(const QString &title);
+    bool launchOmarchyPluginUpdate(const QString &title, const QString &pluginId = {});
     void enqueueOperation(const QString &title, QList<QueuedCommand> commands);
     void runNextCommand();
     void appendLog(const QString &text);
@@ -206,6 +216,7 @@ private:
     QString m_flatpakListOut;
     QString m_pluginListOut;
     QString m_miseListOut;
+    QString m_miseRegistryOut;
     QString m_duOut;
 
     bool m_checkingUpdates = false;
@@ -217,8 +228,15 @@ private:
     QHash<QString, QString> m_miseUpdates;
     qint64 m_lastCheckedEpoch = 0;
 
+    bool m_checkingSecurity = false;
+    bool m_notifySecurityAfterCheck = false;
+    int m_pendingSecurityTasks = 0;
+    QHash<QString, QVector<SecurityAdvisory>> m_securityAdvisories;
+    QNetworkAccessManager m_nam;
+
     QHash<QString, PluginMeta> m_pluginMeta;
     QHash<QString, MiseToolMeta> m_miseMeta;
+    QHash<QString, QString> m_miseRegistry;
 
     bool m_busy = false;
     bool m_lastOperationSucceeded = true;

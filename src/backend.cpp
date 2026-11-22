@@ -1,16 +1,24 @@
 #include "backend.h"
+#include "security.h"
 
+#include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QTimer>
+#include <QUrl>
 
 namespace {
 
@@ -792,6 +800,7 @@ void Backend::reloadPackages(bool checkForUpdatesAfter) {
     m_flatpakListOut.clear();
     m_pluginListOut.clear();
     m_miseListOut.clear();
+    m_miseRegistryOut.clear();
     m_duOut.clear();
     m_pendingLoadTasks = 0;
     emit stateChanged();
@@ -821,8 +830,10 @@ void Backend::reloadPackages(bool checkForUpdatesAfter) {
                    &m_flatpakListOut);
     if (!m_omarchyPluginListPath.isEmpty())
         launchTask(m_omarchyPluginListPath, {"--json"}, &m_pluginListOut);
-    if (!m_misePath.isEmpty())
+    if (!m_misePath.isEmpty()) {
         launchTask(m_misePath, {"-C", QDir::homePath(), "ls", "--json"}, &m_miseListOut);
+        launchTask(m_misePath, {"registry"}, &m_miseRegistryOut);
+    }
     if (!m_duPath.isEmpty()) {
         const QStringList dirs = collectDiskUsageDirs(m_pluginsDir);
         if (!dirs.isEmpty()) {
@@ -852,6 +863,7 @@ void Backend::finalizePackageLoad() {
     const auto dirSizes = parseDuSizes(m_duOut);
     m_pluginMeta.clear();
     m_miseMeta.clear();
+    m_miseRegistry = Security::parseMiseRegistry(m_miseRegistryOut);
 
     QVector<PackageItem> items = parseExpacInstalled(m_expacQOut, repoMap, orphans, omarchyDefaults);
     if (!m_flatpakListOut.isEmpty())
@@ -864,17 +876,21 @@ void Backend::finalizePackageLoad() {
     enrichWithDesktopEntries(items);
     m_model.setPackages(std::move(items));
 
-    // Preserve any already-discovered update markers until the next update check completes.
+    // Preserve any already-discovered update and security markers until the next check completes.
     if (!m_pacmanUpdates.isEmpty() || !m_aurUpdates.isEmpty() || !m_flatpakUpdates.isEmpty()
         || !m_pluginUpdates.isEmpty() || !m_miseUpdates.isEmpty()) {
         m_model.applyUpdates(m_pacmanUpdates, m_aurUpdates, m_flatpakUpdates, m_pluginUpdates, m_miseUpdates);
     }
+    if (!m_securityAdvisories.isEmpty())
+        m_model.applySecurityAdvisories(m_securityAdvisories);
 
     m_loading = false;
     emit stateChanged();
 
-    if (m_checkAfterLoad)
+    if (m_checkAfterLoad) {
         checkUpdates();
+        checkSecurity(true);
+    }
 }
 
 void Backend::checkUpdates() {
@@ -971,6 +987,226 @@ void Backend::finishUpdateCheckStep() {
         QProcess::startDetached(omarchyShell, {"marciobbj.omapkg", "refresh"});
 }
 
+void Backend::checkSecurity(bool notifyOnNew) {
+    if (m_checkingSecurity)
+        return;
+
+    m_checkingSecurity = true;
+    m_notifySecurityAfterCheck = notifyOnNew;
+    m_pendingSecurityTasks = 0;
+    m_securityAdvisories.clear();
+    emit stateChanged();
+
+    constexpr qint64 kArchCacheTtlSecs = 3600;        // 1 hour
+    constexpr qint64 kRegistryCacheTtlSecs = 21600;   // 6 hours (ETag revalidated -> 304 when unchanged)
+    constexpr qint64 kOsvBatchCacheTtlSecs = 3600;    // 1 hour
+    constexpr qint64 kOsvVulnCacheTtlSecs = 86400;    // 24 hours per advisory detail
+    constexpr int kTimeoutMs = 8000;
+    const QString cacheDir = Security::cacheDirectory();
+    const QString appVer = QCoreApplication::applicationVersion();
+    const QString userAgent = QStringLiteral("omapkg/") + (appVer.isEmpty() ? QStringLiteral("dev") : appVer);
+
+    auto fetchGet = [&](const QUrl &url, const QString &cacheFile, qint64 ttlSecs,
+                        std::function<void(const QByteArray &)> handler) {
+        QByteArray cached;
+        if (Security::readFreshCache(cacheFile, ttlSecs, &cached)) {
+            handler(cached);
+            return;
+        }
+        ++m_pendingSecurityTasks;
+        QNetworkRequest req(url);
+        req.setHeader(QNetworkRequest::UserAgentHeader, userAgent);
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setTransferTimeout(kTimeoutMs);
+        const QByteArray etag = Security::readCacheEtag(cacheFile);
+        if (!etag.isEmpty() && QFileInfo::exists(cacheFile))
+            req.setRawHeader("If-None-Match", etag);
+
+        QNetworkReply *reply = m_nam.get(req);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, cacheFile, handler]() {
+            QByteArray payload;
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (status == 304) {
+                Security::touchCacheFile(cacheFile);
+                Security::readFreshCache(cacheFile, -1, &payload);
+            } else if (reply->error() == QNetworkReply::NoError && status >= 200 && status < 300) {
+                payload = reply->readAll();
+                if (!payload.isEmpty()) {
+                    Security::writeCacheFile(cacheFile, payload);
+                    const QByteArray newEtag = reply->rawHeader("ETag");
+                    if (!newEtag.isEmpty())
+                        Security::writeCacheEtag(cacheFile, newEtag);
+                }
+            } else {
+                // Fall back to stale cache when offline or feed is temporarily unreachable.
+                Security::readFreshCache(cacheFile, -1, &payload);
+            }
+            reply->deleteLater();
+            if (!payload.isEmpty())
+                handler(payload);
+            finishSecurityCheckStep();
+        });
+    };
+
+    auto fetchKeyedPost = [&](const QUrl &url, const QByteArray &body, const QString &cacheFile,
+                              const QString &cacheKey, qint64 ttlSecs,
+                              std::function<void(const QByteArray &)> handler) {
+        QByteArray cached;
+        if (Security::readFreshKeyedCache(cacheFile, cacheKey, ttlSecs, &cached)) {
+            handler(cached);
+            return;
+        }
+        ++m_pendingSecurityTasks;
+        QNetworkRequest req(url);
+        req.setHeader(QNetworkRequest::UserAgentHeader, userAgent);
+        req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+        req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+        req.setTransferTimeout(kTimeoutMs);
+
+        QNetworkReply *reply = m_nam.post(req, body);
+        connect(reply, &QNetworkReply::finished, this, [this, reply, cacheFile, cacheKey, handler]() {
+            QByteArray payload;
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (reply->error() == QNetworkReply::NoError && status >= 200 && status < 300) {
+                payload = reply->readAll();
+                if (!payload.isEmpty())
+                    Security::writeKeyedCache(cacheFile, cacheKey, payload);
+            } else {
+                Security::readFreshKeyedCache(cacheFile, cacheKey, -1, &payload);
+            }
+            reply->deleteLater();
+            if (!payload.isEmpty())
+                handler(payload);
+            finishSecurityCheckStep();
+        });
+    };
+
+    // Enrich matched OSV advisory IDs with GET /v1/vulns/<id> (summary, CVEs, severity, fixedVersion).
+    auto enrichOsvResults = [this, cacheDir, userAgent, kOsvVulnCacheTtlSecs, kTimeoutMs](
+                                const QHash<QString, QVector<SecurityAdvisory>> &parsed) {
+        Security::mergeAdvisories(m_securityAdvisories, parsed);
+
+        QSet<QString> vulnIds;
+        for (auto it = parsed.constBegin(); it != parsed.constEnd(); ++it) {
+            for (const auto &adv : it.value()) {
+                static const QRegularExpression safeIdRx(R"(^[A-Za-z0-9._-]+$)");
+                if (safeIdRx.match(adv.id).hasMatch())
+                    vulnIds.insert(adv.id);
+            }
+        }
+
+        for (const QString &vulnId : vulnIds) {
+            const QString vulnCache = cacheDir + "/osv-vuln-" + vulnId + ".json";
+            auto applyDetail = [this, vulnId](const QByteArray &detailJson) {
+                for (auto it = m_securityAdvisories.begin(); it != m_securityAdvisories.end(); ++it) {
+                    for (auto &adv : it.value()) {
+                        if (adv.id == vulnId)
+                            Security::enrichOsvAdvisory(adv, detailJson);
+                    }
+                }
+            };
+
+            QByteArray cachedDetail;
+            if (Security::readFreshCache(vulnCache, kOsvVulnCacheTtlSecs, &cachedDetail)) {
+                applyDetail(cachedDetail);
+                continue;
+            }
+
+            ++m_pendingSecurityTasks;
+            QNetworkRequest req(QUrl(QStringLiteral("https://api.osv.dev/v1/vulns/") + vulnId));
+            req.setHeader(QNetworkRequest::UserAgentHeader, userAgent);
+            req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+            req.setTransferTimeout(kTimeoutMs);
+            QNetworkReply *reply = m_nam.get(req);
+            connect(reply, &QNetworkReply::finished, this, [this, reply, vulnCache, applyDetail]() {
+                QByteArray payload;
+                const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+                if (reply->error() == QNetworkReply::NoError && status >= 200 && status < 300) {
+                    payload = reply->readAll();
+                    if (!payload.isEmpty())
+                        Security::writeCacheFile(vulnCache, payload);
+                } else {
+                    Security::readFreshCache(vulnCache, -1, &payload);
+                }
+                reply->deleteLater();
+                if (!payload.isEmpty())
+                    applyDetail(payload);
+                finishSecurityCheckStep();
+            });
+        }
+    };
+
+    // 1. Arch Linux Security Tracker (Pacman & Omarchy CVEs).
+    fetchGet(
+        QUrl(QStringLiteral("https://security.archlinux.org/json")),
+        cacheDir + "/arch-security.json",
+        kArchCacheTtlSecs,
+        [this](const QByteArray &data) {
+            Security::mergeAdvisories(
+                m_securityAdvisories,
+                Security::matchArchAdvisories(data, m_model.allPackages()));
+        });
+
+    // 2. Omarchy Plugin Marketplace registry (retired plugins, baseline findings, revoked reviews).
+    if (!m_pluginMeta.isEmpty()) {
+        fetchGet(
+            QUrl(QStringLiteral("https://raw.githubusercontent.com/omacom/omarchy-plugin-marketplace/main/registry.json")),
+            cacheDir + "/marketplace-registry.json",
+            kRegistryCacheTtlSecs,
+            [this](const QByteArray &data) {
+                Security::mergeAdvisories(
+                    m_securityAdvisories,
+                    Security::matchMarketplacePlugins(data, m_model.allPackages(), m_pluginMeta));
+            });
+    }
+
+    // 3. OSV.dev batch vulnerability query for Mise packages (non-blocking via preloaded mise registry).
+    if (!m_miseMeta.isEmpty()) {
+        QVector<OsvQueryTarget> targets;
+        for (const auto &pkg : m_model.allPackages()) {
+            if (pkg.source != "mise")
+                continue;
+            const QString regLine = m_miseRegistry.value(pkg.name);
+            auto target = Security::resolveMiseOsvTarget(pkg, regLine);
+            if (!target.ecosystem.isEmpty())
+                targets.append(std::move(target));
+        }
+
+        if (!targets.isEmpty()) {
+            const QByteArray body = Security::buildOsvBatchRequest(targets);
+            const QString keyHash = QString::fromLatin1(
+                QCryptographicHash::hash(body, QCryptographicHash::Sha256).toHex());
+            fetchKeyedPost(
+                QUrl(QStringLiteral("https://api.osv.dev/v1/querybatch")),
+                body,
+                cacheDir + "/osv-mise.json",
+                keyHash,
+                kOsvBatchCacheTtlSecs,
+                [targets, enrichOsvResults](const QByteArray &data) {
+                    enrichOsvResults(Security::parseOsvBatchResponse(data, targets));
+                });
+        }
+    }
+
+    if (m_pendingSecurityTasks == 0)
+        finishSecurityCheckStep();
+}
+
+void Backend::finishSecurityCheckStep() {
+    if (m_pendingSecurityTasks > 0)
+        --m_pendingSecurityTasks;
+    if (m_pendingSecurityTasks > 0)
+        return;
+
+    Security::sortAdvisoriesMap(m_securityAdvisories);
+    m_model.applySecurityAdvisories(m_securityAdvisories);
+    if (m_notifySecurityAfterCheck)
+        Security::notifyNewAdvisories(m_model.allPackages(), m_securityAdvisories);
+
+    m_checkingSecurity = false;
+    emit stateChanged();
+}
+
 PackageUpdateStrategy Backend::planPackageUpdate(const QString &source, bool hasPendingSystemUpdates) {
     // Arch Linux does not support partial upgrades: every Omarchy or Pacman
     // package update must go through Omarchy's full system update flow.
@@ -1002,6 +1238,34 @@ SystemUpdateLaunch Backend::resolveOmarchyUpdateLaunch(const QString &omarchyTer
         return {omarchyTerminalPath, {"omarchy-update"}};
     if (!xdgTerminalPath.isEmpty())
         return {xdgTerminalPath, {"-e", omarchyUpdatePath}};
+    return {};
+}
+
+SystemUpdateLaunch Backend::resolvePluginUpdateLaunch(const QString &omarchyTerminalPath,
+                                                      const QString &omarchyPluginUpdatePath,
+                                                      const QString &xdgTerminalPath,
+                                                      const QString &pluginId) {
+    if (omarchyPluginUpdatePath.isEmpty())
+        return {};
+
+    // Mirror omarchy-plugin-update's strict ID validation before constructing
+    // any terminal command so untrusted characters can never reach bash -c.
+    if (!pluginId.isEmpty()) {
+        static const QRegularExpression validIdRx(R"(^[A-Za-z0-9][A-Za-z0-9._-]*$)");
+        if (!validIdRx.match(pluginId).hasMatch() || pluginId.contains(".."))
+            return {};
+    }
+
+    if (!omarchyTerminalPath.isEmpty()) {
+        if (pluginId.isEmpty())
+            return {omarchyTerminalPath, {"omarchy-plugin-update"}};
+        return {omarchyTerminalPath, {"omarchy-plugin-update", pluginId}};
+    }
+    if (!xdgTerminalPath.isEmpty()) {
+        if (pluginId.isEmpty())
+            return {xdgTerminalPath, {"-e", omarchyPluginUpdatePath}};
+        return {xdgTerminalPath, {"-e", omarchyPluginUpdatePath, pluginId}};
+    }
     return {};
 }
 
@@ -1037,6 +1301,37 @@ bool Backend::launchOmarchySystemUpdate(const QString &title) {
 
     m_lastOperationSucceeded = true;
     m_statusMessage = tr("Updating Omarchy and Pacman packages");
+    emit stateChanged();
+    emit operationChanged();
+    return true;
+}
+
+bool Backend::launchOmarchyPluginUpdate(const QString &title, const QString &pluginId) {
+    // Open omarchy-plugin-update interactively so the user reviews the full git diff
+    // before merging unsandboxed third-party QML/shell code.
+    const auto launch = resolvePluginUpdateLaunch(
+        m_omarchyTerminalPath, m_omarchyPluginUpdatePath, m_xdgTerminalPath, pluginId);
+    if (launch.program.isEmpty()) {
+        m_errorMessage = tr("omarchy-plugin-update is not available on this system.");
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorMessage.clear();
+    if (!m_logText.isEmpty())
+        appendLog("\n");
+    appendLog("==> " + title + "\n");
+    appendLog("$ " + QFileInfo(launch.program).fileName() + " " + launch.arguments.join(' ') + "\n");
+
+    if (!QProcess::startDetached(launch.program, launch.arguments)) {
+        m_errorMessage = tr("Failed to launch omarchy-plugin-update.");
+        appendLog(m_errorMessage + "\n");
+        emit stateChanged();
+        return false;
+    }
+
+    m_lastOperationSucceeded = true;
+    m_statusMessage = tr("Updating Omarchy plugins");
     emit stateChanged();
     emit operationChanged();
     return true;
@@ -1081,19 +1376,8 @@ void Backend::updatePackage(const QString &pkgId) {
             false
         });
     } else if (strategy == PackageUpdateStrategy::PluginPackageUpdate) {
-        if (m_omarchyPluginUpdatePath.isEmpty()) {
-            m_errorMessage = tr("omarchy-plugin-update is not available on this system.");
-            emit stateChanged();
-            return;
-        }
-        commands.append({
-            m_omarchyPluginUpdatePath,
-            {pkg->name, "--yes"},
-            tr("Updating %1").arg(pkg->displayName),
-            false,
-            false,
-            {{"GIT_TERMINAL_PROMPT", "0"}, {"GIT_SSH_COMMAND", "ssh -oBatchMode=yes"}}
-        });
+        launchOmarchyPluginUpdate(tr("Updating %1").arg(pkg->displayName), pkg->name);
+        return;
     } else if (strategy == PackageUpdateStrategy::MisePackageUpdate) {
         if (m_misePath.isEmpty())
             return;
@@ -1168,16 +1452,9 @@ void Backend::updateAll() {
         });
     }
     if (!outdatedPlugins.isEmpty() && !m_omarchyPluginUpdatePath.isEmpty()) {
-        for (const QString &pluginId : outdatedPlugins) {
-            commands.append({
-                m_omarchyPluginUpdatePath,
-                {pluginId, "--yes"},
-                tr("Updating Omarchy plugins"),
-                false,
-                false,
-                {{"GIT_TERMINAL_PROMPT", "0"}, {"GIT_SSH_COMMAND", "ssh -oBatchMode=yes"}}
-            });
-        }
+        // Open interactive diff review for Omarchy Plugins rather than passing --yes.
+        const QString targetId = (outdatedPlugins.size() == 1) ? outdatedPlugins.first() : QString();
+        launchOmarchyPluginUpdate(tr("Updating Omarchy plugins"), targetId);
     }
     if (needMise && !m_misePath.isEmpty()) {
         commands.append({
@@ -1508,7 +1785,7 @@ void Backend::launchApp(const QString &pkgId) {
     }
 }
 
-QJsonObject Backend::runCliSnapshot(bool includeUpdates) {
+QJsonObject Backend::runCliSnapshot(bool includeUpdates, bool includeSecurity, bool notifySecurity) {
     auto runSync = [](const QString &program, const QStringList &args) -> QString {
         if (program.isEmpty())
             return {};
@@ -1542,6 +1819,7 @@ QJsonObject Backend::runCliSnapshot(bool includeUpdates) {
 
     m_pluginMeta.clear();
     m_miseMeta.clear();
+    m_miseRegistry = Security::parseMiseRegistry(m_miseRegistryOut);
 
     QVector<PackageItem> items = parseExpacInstalled(
         runSync(m_expacPath, {"-Q", "%n\t%v\t%m\t%w\t%l\t%u\t%d", "-t", "%s"}),
@@ -1558,6 +1836,8 @@ QJsonObject Backend::runCliSnapshot(bool includeUpdates) {
     if (!m_misePath.isEmpty()) {
         items.append(parseMiseInstalled(
             runSync(m_misePath, {"-C", QDir::homePath(), "ls", "--json"}), dirSizes, &m_miseMeta));
+        if (includeSecurity)
+            m_miseRegistry = Security::parseMiseRegistry(runSync(m_misePath, {"registry"}));
     }
     enrichWithDesktopEntries(items);
     m_model.setPackages(std::move(items));
@@ -1631,8 +1911,40 @@ QJsonObject Backend::runCliSnapshot(bool includeUpdates) {
         m_model.applyUpdates(pacUpdates, aurUpdates, fpUpdates, pluginUpdates, miseUpdates);
     }
 
+    if (includeSecurity) {
+        QEventLoop loop;
+        QTimer timeout;
+        timeout.setSingleShot(true);
+        QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+        QObject::connect(this, &Backend::stateChanged, &loop, [this, &loop]() {
+            if (!m_checkingSecurity)
+                loop.quit();
+        });
+        checkSecurity(notifySecurity);
+        if (m_checkingSecurity) {
+            timeout.start(12000);
+            loop.exec();
+        }
+    }
+
     QJsonArray arr;
     for (const auto &pkg : m_model.allPackages()) {
+        QJsonArray advArr;
+        for (const auto &adv : pkg.securityAdvisories) {
+            QJsonArray cveArr;
+            for (const QString &c : adv.cves)
+                cveArr.append(c);
+            advArr.append(QJsonObject{
+                {"id", adv.id},
+                {"cves", cveArr},
+                {"severity", adv.severity},
+                {"summary", adv.summary},
+                {"fixedVersion", adv.fixedVersion},
+                {"url", adv.url},
+                {"source", adv.source},
+            });
+        }
+
         arr.append(QJsonObject{
             {"id", pkg.id},
             {"name", pkg.name},
@@ -1645,6 +1957,9 @@ QJsonObject Backend::runCliSnapshot(bool includeUpdates) {
             {"explicit", pkg.explicitInstall},
             {"orphan", pkg.isOrphan},
             {"hasUpdate", pkg.hasUpdate},
+            {"hasSecurityAlert", !pkg.securityAdvisories.isEmpty()},
+            {"securitySeverity", Security::highestSeverity(pkg.securityAdvisories)},
+            {"securityAdvisories", advArr},
             {"description", pkg.description},
         });
     }
@@ -1652,6 +1967,8 @@ QJsonObject Backend::runCliSnapshot(bool includeUpdates) {
     return QJsonObject{
         {"totalPackages", m_model.totalCount()},
         {"updatesCount", m_model.updatesCount()},
+        {"securityAlertsCount", m_model.securityAlertCount()},
+        {"highestSecuritySeverity", m_model.highestSecuritySeverity()},
         {"orphanCount", m_model.orphanCount()},
         {"totalBytes", m_model.totalBytes()},
         {"omarchyBytes", m_model.omarchyBytes()},

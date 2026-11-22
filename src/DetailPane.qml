@@ -37,6 +37,12 @@ Rectangle {
         return src || ""
     }
 
+    function isSafeHttpUrl(url) {
+        if (!url) return false
+        var s = String(url).trim()
+        return s.indexOf("https://") === 0 || s.indexOf("http://") === 0
+    }
+
     // Empty state when nothing is selected.
     ColumnLayout {
         anchors.centerIn: parent
@@ -262,6 +268,103 @@ Rectangle {
                 lineHeight: 1.35
             }
 
+            // Security advisories banner (CVEs, revoked/retired plugins, OSV alerts).
+            Rectangle {
+                visible: Boolean(root.pkg.hasSecurityAlert && root.pkg.securityAdvisories && root.pkg.securityAdvisories.length > 0)
+                Layout.fillWidth: true
+                implicitHeight: secCol.implicitHeight + 20
+                radius: Math.min(8, theme.radius)
+                color: Qt.rgba(Qt.color(theme.red).r, Qt.color(theme.red).g, Qt.color(theme.red).b, 0.14)
+                border.width: 1
+                border.color: Qt.rgba(Qt.color(theme.red).r, Qt.color(theme.red).g, Qt.color(theme.red).b, 0.5)
+
+                ColumnLayout {
+                    id: secCol
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 8
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        Text {
+                            text: qsTr("Security advisory")
+                            color: theme.red
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Rectangle {
+                            height: 18
+                            width: sevBadgeText.implicitWidth + 10
+                            radius: Math.min(4, theme.radius)
+                            color: theme.red
+
+                            Text {
+                                id: sevBadgeText
+                                anchors.centerIn: parent
+                                text: root.pkg.securitySeverity ? root.pkg.securitySeverity.toUpperCase() : "ALERT"
+                                color: "white"
+                                font.pixelSize: 10
+                                font.bold: true
+                            }
+                        }
+                    }
+
+                    Repeater {
+                        model: root.pkg.securityAdvisories ? root.pkg.securityAdvisories.slice(0, 6) : []
+
+                        delegate: ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+
+                                Text {
+                                    text: modelData.cves && modelData.cves.length > 0
+                                          ? (modelData.id + " · " + modelData.cves.slice(0, 2).join(", "))
+                                          : modelData.id
+                                    color: theme.brightForeground
+                                    font.pixelSize: 11
+                                    font.family: "monospace"
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: root.isSafeHttpUrl(modelData.url)
+                                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: if (root.isSafeHttpUrl(modelData.url)) Qt.openUrlExternally(modelData.url)
+                                    }
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.summary || ""
+                                color: theme.lightForeground
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Text {
+                                visible: Boolean(modelData.fixedVersion && modelData.fixedVersion.length > 0)
+                                Layout.fillWidth: true
+                                text: qsTr("Fixed in %1").arg(modelData.fixedVersion || "")
+                                color: theme.green
+                                font.pixelSize: 11
+                            }
+                        }
+                    }
+                }
+            }
+
             // Update callout banner.
             Rectangle {
                 visible: !!root.pkg.hasUpdate
@@ -292,7 +395,7 @@ Rectangle {
                         Item { Layout.fillWidth: true }
 
                         Rectangle {
-                            visible: root.pkg.source === "omarchy" || root.pkg.source === "pacman"
+                            visible: root.pkg.source === "omarchy" || root.pkg.source === "pacman" || root.pkg.source === "omarchy-plugin"
                             height: 18
                             width: omarchyUpdateBadge.implicitWidth + 10
                             radius: Math.min(4, theme.radius)
@@ -302,7 +405,7 @@ Rectangle {
                             Text {
                                 id: omarchyUpdateBadge
                                 anchors.centerIn: parent
-                                text: "omarchy-update"
+                                text: root.pkg.source === "omarchy-plugin" ? "omarchy-plugin-update" : "omarchy-update"
                                 color: theme.green
                                 font.pixelSize: 10
                                 font.family: "monospace"
@@ -460,8 +563,9 @@ Rectangle {
                             id: urlMouse
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Qt.openUrlExternally(root.pkg.url)
+                            enabled: root.isSafeHttpUrl(root.pkg.url)
+                            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: if (root.isSafeHttpUrl(root.pkg.url)) Qt.openUrlExternally(root.pkg.url)
                         }
                     }
                 }

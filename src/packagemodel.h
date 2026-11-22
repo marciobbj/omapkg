@@ -3,8 +3,20 @@
 #include <QAbstractListModel>
 #include <QHash>
 #include <QString>
+#include <QStringList>
+#include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
+
+struct SecurityAdvisory {
+    QString id;
+    QStringList cves;
+    QString severity;     // "critical", "high", "medium", "low"
+    QString summary;
+    QString fixedVersion;
+    QString url;
+    QString source;       // "arch-security", "omarchy-marketplace", "osv"
+};
 
 struct PackageItem {
     QString id;
@@ -24,6 +36,7 @@ struct PackageItem {
     bool hasUpdate = false;
     QString iconName;
     QString desktopId;
+    QVector<SecurityAdvisory> securityAdvisories;
 };
 
 class PackageModel : public QAbstractListModel {
@@ -39,6 +52,8 @@ class PackageModel : public QAbstractListModel {
     Q_PROPERTY(int totalCount READ totalCount NOTIFY statsChanged)
     Q_PROPERTY(int scopeCount READ scopeCount NOTIFY statsChanged)
     Q_PROPERTY(int updatesCount READ updatesCount NOTIFY statsChanged)
+    Q_PROPERTY(int securityAlertCount READ securityAlertCount NOTIFY statsChanged)
+    Q_PROPERTY(QString highestSecuritySeverity READ highestSecuritySeverity NOTIFY statsChanged)
     Q_PROPERTY(int omarchyCount READ omarchyCount NOTIFY statsChanged)
     Q_PROPERTY(int pacmanCount READ pacmanCount NOTIFY statsChanged)
     Q_PROPERTY(int aurCount READ aurCount NOTIFY statsChanged)
@@ -74,7 +89,11 @@ public:
         IsOmarchyDefaultRole,
         HasUpdateRole,
         IconNameRole,
-        DesktopIdRole
+        DesktopIdRole,
+        HasSecurityAlertRole,
+        SecuritySeverityRole,
+        SecurityAlertCountRole,
+        SecurityAdvisoriesRole
     };
 
     explicit PackageModel(QObject *parent = nullptr);
@@ -89,6 +108,7 @@ public:
                       const QHash<QString, QString> &flatpakUpdates,
                       const QHash<QString, QString> &pluginUpdates = {},
                       const QHash<QString, QString> &miseUpdates = {});
+    void applySecurityAdvisories(const QHash<QString, QVector<SecurityAdvisory>> &advisoriesByPkgId);
 
     const QVector<PackageItem> &allPackages() const { return m_all; }
     const PackageItem *findById(const QString &id) const;
@@ -111,6 +131,8 @@ public:
     int totalCount() const { return m_all.size(); }
     int scopeCount() const { return m_scopeCount; }
     int updatesCount() const { return m_updatesCount; }
+    int securityAlertCount() const { return m_securityAlertCount; }
+    QString highestSecuritySeverity() const { return m_highestSecuritySeverity; }
     int omarchyCount() const { return m_omarchyCount; }
     int pacmanCount() const { return m_pacmanCount; }
     int aurCount() const { return m_aurCount; }
@@ -152,6 +174,8 @@ private:
     qint64 m_maxVisibleBytes = 0;
     int m_scopeCount = 0;
     int m_updatesCount = 0;
+    int m_securityAlertCount = 0;
+    QString m_highestSecuritySeverity;
     int m_omarchyCount = 0;
     int m_pacmanCount = 0;
     int m_aurCount = 0;

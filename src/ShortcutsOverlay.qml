@@ -70,6 +70,7 @@ Rectangle {
                         { key: "R", desc: qsTr("Refresh list and check updates") },
                         { key: "Delete", desc: qsTr("Remove selected package") },
                         { key: "1 – 9", desc: qsTr("Switch package source filter") },
+                        { key: "S", desc: qsTr("Show security alerts") },
                         { key: "L", desc: qsTr("Toggle activity log") },
                         { key: "?", desc: qsTr("Show or hide shortcuts") },
                         { key: "Esc", desc: qsTr("Clear search or close dialog") },
@@ -112,6 +113,13 @@ Rectangle {
 
             RowLayout {
                 Layout.fillWidth: true
+                Text {
+                    visible: Qt.application.version.length > 0
+                    text: "Omapkg v" + Qt.application.version
+                    color: theme.darkForeground
+                    font.pixelSize: 11
+                    font.family: "monospace"
+                }
                 Item { Layout.fillWidth: true }
                 Button {
                     text: qsTr("Close")

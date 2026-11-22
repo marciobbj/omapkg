@@ -281,6 +281,12 @@ ApplicationWindow {
         enabled: !win.typingInSearch && !win.modalOpen && backend.packages.orphanCount > 0
         onActivated: backend.packages.filterSource = "orphans"
     }
+    Shortcut {
+        sequence: "S"
+        context: Qt.ApplicationShortcut
+        enabled: !win.typingInSearch && !win.modalOpen && backend.packages.securityAlertCount > 0
+        onActivated: backend.packages.filterSource = "security"
+    }
 
     // Right-to-left languages mirror the window; Translator sets the layout direction.
     Item {
@@ -304,15 +310,40 @@ ApplicationWindow {
                     anchors.rightMargin: 16
                     spacing: 12
 
-                    // App title and live disk/count summary.
+                    // App title, version pill, and live disk/count summary.
                     ColumnLayout {
                         spacing: 2
 
-                        Text {
-                            text: "Omapkg"
-                            color: theme.brightForeground
-                            font.pixelSize: 18
-                            font.bold: true
+                        RowLayout {
+                            spacing: 8
+
+                            Text {
+                                text: "Omapkg"
+                                color: theme.brightForeground
+                                font.pixelSize: 18
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                visible: Qt.application.version.length > 0
+                                height: 18
+                                implicitWidth: verBadgeText.implicitWidth + 10
+                                Layout.alignment: Qt.AlignVCenter
+                                radius: Math.min(4, theme.radius)
+                                color: theme.background
+                                border.width: 1
+                                border.color: theme.selection
+
+                                Text {
+                                    id: verBadgeText
+                                    anchors.centerIn: parent
+                                    text: "v" + Qt.application.version
+                                    color: theme.darkForeground
+                                    font.pixelSize: 10
+                                    font.family: "monospace"
+                                    font.weight: Font.Medium
+                                }
+                            }
                         }
 
                         Text {
@@ -630,6 +661,7 @@ ApplicationWindow {
                             model: [
                                 { id: "all", label: qsTr("All"), count: backend.packages.scopeCount, dot: theme.foreground, show: true },
                                 { id: "updates", label: qsTr("Updates"), count: backend.packages.updatesCount, dot: theme.green, show: true },
+                                { id: "security", label: qsTr("Security"), count: backend.packages.securityAlertCount, dot: theme.red, show: backend.packages.securityAlertCount > 0 },
                                 { id: "omarchy", label: qsTr("Omarchy"), count: backend.packages.omarchyCount, dot: theme.accent, show: true },
                                 { id: "pacman", label: qsTr("Pacman"), count: backend.packages.pacmanCount, dot: theme.blue, show: true },
                                 { id: "aur", label: qsTr("AUR"), count: backend.packages.aurCount, dot: theme.magenta, show: true },
@@ -675,9 +707,11 @@ ApplicationWindow {
                                         height: 20
                                         implicitWidth: Math.max(24, countText.implicitWidth + 10)
                                         radius: Math.min(10, theme.radius)
-                                        color: modelData.id === "updates" && modelData.count > 0
-                                               ? theme.green
-                                               : theme.background
+                                        color: modelData.id === "security" && modelData.count > 0
+                                               ? theme.red
+                                               : (modelData.id === "updates" && modelData.count > 0
+                                                  ? theme.green
+                                                  : theme.background)
 
                                         Text {
                                             id: countText
@@ -686,11 +720,11 @@ ApplicationWindow {
                                                 void translator.language
                                                 return translator.formatNumber(modelData.count)
                                             }
-                                            color: modelData.id === "updates" && modelData.count > 0
-                                                   ? (theme.isLight ? "white" : "black")
+                                            color: (modelData.id === "security" || modelData.id === "updates") && modelData.count > 0
+                                                   ? (modelData.id === "security" ? "white" : (theme.isLight ? "white" : "black"))
                                                    : theme.darkForeground
                                             font.pixelSize: 11
-                                            font.bold: modelData.id === "updates" && modelData.count > 0
+                                            font.bold: (modelData.id === "security" || modelData.id === "updates") && modelData.count > 0
                                         }
                                     }
                                 }

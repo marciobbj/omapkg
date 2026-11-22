@@ -1,4 +1,5 @@
 #include "packagemodel.h"
+#include "security.h"
 
 #include <algorithm>
 
@@ -31,6 +32,10 @@ QVariant PackageModel::data(const QModelIndex &index, int role) const {
     case HasUpdateRole: return pkg.hasUpdate;
     case IconNameRole: return pkg.iconName;
     case DesktopIdRole: return pkg.desktopId;
+    case HasSecurityAlertRole: return !pkg.securityAdvisories.isEmpty();
+    case SecuritySeverityRole: return Security::highestSeverity(pkg.securityAdvisories);
+    case SecurityAlertCountRole: return pkg.securityAdvisories.size();
+    case SecurityAdvisoriesRole: return Security::advisoriesToVariantList(pkg.securityAdvisories);
     default: return {};
     }
 }
@@ -54,6 +59,10 @@ QHash<int, QByteArray> PackageModel::roleNames() const {
         {HasUpdateRole, "hasUpdate"},
         {IconNameRole, "iconName"},
         {DesktopIdRole, "desktopId"},
+        {HasSecurityAlertRole, "hasSecurityAlert"},
+        {SecuritySeverityRole, "securitySeverity"},
+        {SecurityAlertCountRole, "securityAlertCount"},
+        {SecurityAdvisoriesRole, "securityAdvisories"},
     };
 }
 
@@ -88,6 +97,12 @@ void PackageModel::applyUpdates(const QHash<QString, QString> &pacmanAndOmarchyU
             pkg.availableVersion = miseUpdates.value(pkg.name);
         }
     }
+    rebuild();
+}
+
+void PackageModel::applySecurityAdvisories(const QHash<QString, QVector<SecurityAdvisory>> &advisoriesByPkgId) {
+    for (auto &pkg : m_all)
+        pkg.securityAdvisories = advisoriesByPkgId.value(pkg.id);
     rebuild();
 }
 
@@ -149,6 +164,10 @@ QVariantMap PackageModel::toVariantMap(const PackageItem &pkg) {
         {"hasUpdate", pkg.hasUpdate},
         {"iconName", pkg.iconName},
         {"desktopId", pkg.desktopId},
+        {"hasSecurityAlert", !pkg.securityAdvisories.isEmpty()},
+        {"securitySeverity", Security::highestSeverity(pkg.securityAdvisories)},
+        {"securityAlertCount", pkg.securityAdvisories.size()},
+        {"securityAdvisories", Security::advisoriesToVariantList(pkg.securityAdvisories)},
     };
 }
 
@@ -178,6 +197,9 @@ void PackageModel::rebuild() {
     m_maxVisibleBytes = 0;
     m_scopeCount = 0;
     m_updatesCount = 0;
+    m_securityAlertCount = 0;
+    m_highestSecuritySeverity.clear();
+    int highestSecRank = 0;
     m_omarchyCount = 0;
     m_pacmanCount = 0;
     m_aurCount = 0;
@@ -203,6 +225,15 @@ void PackageModel::rebuild() {
         // of the explicit-only toggle, so important maintenance is never hidden.
         if (pkg.hasUpdate)
             ++m_updatesCount;
+        if (!pkg.securityAdvisories.isEmpty()) {
+            ++m_securityAlertCount;
+            const QString sev = Security::highestSeverity(pkg.securityAdvisories);
+            const int rank = Security::severityRank(sev);
+            if (rank > highestSecRank) {
+                highestSecRank = rank;
+                m_highestSecuritySeverity = sev;
+            }
+        }
         if (pkg.isOrphan) {
             ++m_orphanCount;
             m_orphanBytes += pkg.sizeBytes;
@@ -237,6 +268,8 @@ void PackageModel::rebuild() {
         bool matchesTab = false;
         if (m_filterSource == "updates")
             matchesTab = pkg.hasUpdate;
+        else if (m_filterSource == "security")
+            matchesTab = !pkg.securityAdvisories.isEmpty();
         else if (m_filterSource == "orphans")
             matchesTab = pkg.isOrphan;
         else if (m_filterSource == "all")
@@ -265,6 +298,12 @@ void PackageModel::rebuild() {
     std::sort(m_visible.begin(), m_visible.end(), [this](int aIdx, int bIdx) {
         const PackageItem &a = m_all.at(aIdx);
         const PackageItem &b = m_all.at(bIdx);
+        if (m_filterSource == "security") {
+            const int ra = Security::severityRank(Security::highestSeverity(a.securityAdvisories));
+            const int rb = Security::severityRank(Security::highestSeverity(b.securityAdvisories));
+            if (ra != rb)
+                return ra > rb;
+        }
         if (m_sortBy == "size") {
             if (a.sizeBytes != b.sizeBytes)
                 return a.sizeBytes > b.sizeBytes;

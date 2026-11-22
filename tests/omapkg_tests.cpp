@@ -7,6 +7,7 @@
 
 #include "backend.h"
 #include "packagemodel.h"
+#include "security.h"
 #include "theme.h"
 #include "translator.h"
 
@@ -438,6 +439,177 @@ private slots:
             "",
             "/usr/bin/xdg-terminal-exec");
         QVERIFY(missing.program.isEmpty());
+
+        // Omarchy plugin updates launch interactively (without --yes) so users review git diffs.
+        const auto pluginSingle = Backend::resolvePluginUpdateLaunch(
+            "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation",
+            "/usr/share/omarchy/bin/omarchy-plugin-update",
+            "/usr/bin/xdg-terminal-exec",
+            "harshith.system-monitor");
+        QCOMPARE(pluginSingle.program, QString("/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation"));
+        QCOMPARE(pluginSingle.arguments, QStringList({"omarchy-plugin-update", "harshith.system-monitor"}));
+
+        const auto pluginAll = Backend::resolvePluginUpdateLaunch(
+            "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation",
+            "/usr/share/omarchy/bin/omarchy-plugin-update",
+            "/usr/bin/xdg-terminal-exec");
+        QCOMPARE(pluginAll.arguments, QStringList({"omarchy-plugin-update"}));
+
+        // Rejects unsafe plugin IDs containing shell metacharacters or path traversal.
+        const auto pluginUnsafe = Backend::resolvePluginUpdateLaunch(
+            "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation",
+            "/usr/share/omarchy/bin/omarchy-plugin-update",
+            "/usr/bin/xdg-terminal-exec",
+            "bad;rm -rf /");
+        QVERIFY(pluginUnsafe.program.isEmpty());
+    }
+
+    void securityAuditMatchingAndNotifications() {
+        // Arch version comparisons (epochs, pkgrel, numeric vs alpha)
+        QVERIFY(Security::compareArchVersions("1.7.0-2", "1.7.0-3") < 0);
+        QVERIFY(Security::compareArchVersions("1.7.3-1", "1.7.0-2") > 0);
+        QVERIFY(Security::compareArchVersions("1:1.0-1", "9.0-1") > 0);
+        QVERIFY(Security::compareArchVersions("2.14.4-1", "2.14.4-1") == 0);
+        QVERIFY(Security::compareArchVersions("1.0rc1-1", "1.0-1") < 0);
+        QVERIFY(Security::compareArchVersions("1.1.1.o-1", "3.6.5-1") < 0);
+
+        PackageItem pamOld;
+        pamOld.id = "pacman:pam";
+        pamOld.name = "pam";
+        pamOld.displayName = "pam";
+        pamOld.source = "pacman";
+        pamOld.version = "1.7.0-1";
+
+        PackageItem opensslNew;
+        opensslNew.id = "pacman:openssl";
+        opensslNew.name = "openssl";
+        opensslNew.displayName = "openssl";
+        opensslNew.source = "pacman";
+        opensslNew.version = "3.6.5-1";
+
+        PackageItem vimOutdated;
+        vimOutdated.id = "pacman:vim";
+        vimOutdated.name = "vim";
+        vimOutdated.displayName = "vim";
+        vimOutdated.source = "pacman";
+        vimOutdated.version = "9.0.1224-1";
+
+        PackageItem retiredPlugin;
+        retiredPlugin.id = "omarchy-plugin:bad.plugin";
+        retiredPlugin.name = "bad.plugin";
+        retiredPlugin.displayName = "Bad Plugin";
+        retiredPlugin.source = "omarchy-plugin";
+        retiredPlugin.version = "1.0.0";
+
+        PackageItem flaggedPlugin;
+        flaggedPlugin.id = "omarchy-plugin:risky.plugin";
+        flaggedPlugin.name = "risky.plugin";
+        flaggedPlugin.displayName = "Risky Plugin";
+        flaggedPlugin.source = "omarchy-plugin";
+        flaggedPlugin.version = "1.0.0";
+
+        PackageItem miseCodex;
+        miseCodex.id = "mise:codex";
+        miseCodex.name = "codex";
+        miseCodex.displayName = "codex";
+        miseCodex.source = "mise";
+        miseCodex.version = "0.1.0";
+
+        const QVector<PackageItem> pkgs{pamOld, opensslNew, vimOutdated, retiredPlugin, flaggedPlugin, miseCodex};
+
+        // 1. Arch Security Tracker matching:
+        // - pam 1.7.0-1 <= affected 1.7.0-2 (unfixed Vulnerable) -> MATCH
+        // - openssl 3.6.5-1 > affected 1.1.1.o-1 (stale unfixed) -> NO false positive
+        // - vim 9.0.1224-1 < fixed 9.0.1225-1 -> MATCH
+        const QByteArray archJson =
+            "[\n"
+            "  {\"name\":\"AVG-2901\",\"packages\":[\"pam\"],\"status\":\"Vulnerable\",\"severity\":\"High\",\"type\":\"arbitrary filesystem access\",\"affected\":\"1.7.0-2\",\"fixed\":null,\"issues\":[\"CVE-2025-6020\"]},\n"
+            "  {\"name\":\"AVG-2765\",\"packages\":[\"openssl\"],\"status\":\"Vulnerable\",\"severity\":\"Medium\",\"type\":\"command injection\",\"affected\":\"1.1.1.o-1\",\"fixed\":null,\"issues\":[\"CVE-2022-2068\"]},\n"
+            "  {\"name\":\"AVG-2843\",\"packages\":[\"vim\"],\"status\":\"Fixed\",\"severity\":\"Critical\",\"type\":\"heap buffer overflow\",\"affected\":\"9.0.1224-1\",\"fixed\":\"9.0.1225-1\",\"issues\":[\"CVE-2023-0433\"]}\n"
+            "]\n";
+        auto advisories = Security::matchArchAdvisories(archJson, pkgs);
+        QVERIFY(advisories.contains("pacman:pam"));
+        QVERIFY(!advisories.contains("pacman:openssl"));
+        QVERIFY(advisories.contains("pacman:vim"));
+        QCOMPARE(advisories.value("pacman:vim").first().severity, QString("critical"));
+        QCOMPARE(advisories.value("pacman:vim").first().fixedVersion, QString("9.0.1225-1"));
+
+        // 2. Omarchy Plugin Marketplace registry matching (retired + needs-fixes baseline)
+        const QByteArray regJson =
+            "{\n"
+            "  \"retiredPluginIds\": [\"bad.plugin\"],\n"
+            "  \"sources\": [\n"
+            "    {\n"
+            "      \"repo\": \"https://github.com/example/risky\",\n"
+            "      \"catalog\": {\"id\": \"risky.plugin\"},\n"
+            "      \"automatedSecurityBaseline\": {\n"
+            "        \"pluginIds\": [\"risky.plugin\"],\n"
+            "        \"outcome\": \"needs-fixes\",\n"
+            "        \"findings\": [\"curl-pipe-shell\"]\n"
+            "      }\n"
+            "    }\n"
+            "  ]\n"
+            "}\n";
+        Security::mergeAdvisories(advisories, Security::matchMarketplacePlugins(regJson, pkgs, {}));
+        QVERIFY(advisories.contains("omarchy-plugin:bad.plugin"));
+        QCOMPARE(advisories.value("omarchy-plugin:bad.plugin").first().severity, QString("low"));
+        QVERIFY(advisories.contains("omarchy-plugin:risky.plugin"));
+        QCOMPARE(advisories.value("omarchy-plugin:risky.plugin").first().severity, QString("critical"));
+
+        // 3. OSV.dev target resolution, batch parsing, and detail enrichment
+        const auto osvTarget = Security::resolveMiseOsvTarget(miseCodex, "aqua:openai/codex npm:@openai/codex");
+        QCOMPARE(osvTarget.ecosystem, QString("npm"));
+        QCOMPARE(osvTarget.packageName, QString("@openai/codex"));
+        const QByteArray osvResp =
+            "{\"results\":[{\"vulns\":[{\"id\":\"GHSA-xrxf-jgv3-qmrm\",\"modified\":\"2026-04-16T23:11:28Z\"}]}]}";
+        auto osvAdvisories = Security::parseOsvBatchResponse(osvResp, {osvTarget});
+        QVERIFY(osvAdvisories.contains("mise:codex"));
+        Security::enrichOsvAdvisory(
+            osvAdvisories["mise:codex"][0],
+            "{\"id\":\"GHSA-xrxf-jgv3-qmrm\",\"aliases\":[\"CVE-2026-1234\"],\"summary\":\"Command injection in CLI\",\"database_specific\":{\"severity\":\"HIGH\"},\"affected\":[{\"ranges\":[{\"events\":[{\"introduced\":\"0\"},{\"fixed\":\"0.171.0\"}]}]}]}");
+        QCOMPARE(osvAdvisories.value("mise:codex").first().cves, QStringList({"CVE-2026-1234"}));
+        QCOMPARE(osvAdvisories.value("mise:codex").first().severity, QString("high"));
+        QCOMPARE(osvAdvisories.value("mise:codex").first().summary, QString("Command injection in CLI"));
+        QCOMPARE(osvAdvisories.value("mise:codex").first().fixedVersion, QString("0.171.0"));
+        Security::mergeAdvisories(advisories, osvAdvisories);
+
+        // 4. PackageModel security filtering & severity sorting
+        PackageModel model;
+        model.setPackages(pkgs);
+        model.applySecurityAdvisories(advisories);
+        QCOMPARE(model.securityAlertCount(), 5);
+        QCOMPARE(model.highestSecuritySeverity(), QString("critical"));
+        model.setFilterSource("security");
+        QCOMPARE(model.visibleCount(), 5);
+        QCOMPARE(model.get(0).value("securitySeverity").toString(), QString("critical"));
+
+        // 5. Notification deduplication:
+        // - notifies once for medium/high/critical packages (4 of the 5; "low" bad.plugin is silent)
+        // - 0 on repeat
+        QTemporaryDir stateTmp;
+        QVERIFY(stateTmp.isValid());
+        const QString stateFile = stateTmp.filePath("notified.json");
+        QCOMPARE(Security::notifyNewAdvisories(pkgs, advisories, stateFile, {}, false), 4);
+        QCOMPARE(Security::notifyNewAdvisories(pkgs, advisories, stateFile, {}, false), 0);
+
+        // 6. URL sanitization, mise registry parsing, and keyed cache
+        QCOMPARE(Security::sanitizeHttpUrl("https://security.archlinux.org/AVG-2901"),
+                 QString("https://security.archlinux.org/AVG-2901"));
+        QVERIFY(Security::sanitizeHttpUrl("file:///etc/passwd").isEmpty());
+        QVERIFY(Security::sanitizeHttpUrl("javascript:alert(1)").isEmpty());
+
+        const auto regMap = Security::parseMiseRegistry(
+            "codex                         aqua:openai/codex npm:@openai/codex\n"
+            "go                            core:go\n");
+        QCOMPARE(regMap.value("codex"), QString("aqua:openai/codex npm:@openai/codex"));
+        QCOMPARE(regMap.value("go"), QString("core:go"));
+
+        const QString keyedFile = stateTmp.filePath("osv-mise.json");
+        QVERIFY(Security::writeKeyedCache(keyedFile, "hash-a", "{\"results\":[]}"));
+        QByteArray cachedOut;
+        QVERIFY(Security::readFreshKeyedCache(keyedFile, "hash-a", 3600, &cachedOut));
+        QCOMPARE(cachedOut, QByteArray("{\"results\":[]}"));
+        QVERIFY(!Security::readFreshKeyedCache(keyedFile, "hash-b", 3600, &cachedOut));
     }
 };
 
