@@ -23,16 +23,22 @@ int runCli(int argc, char *argv[], const QString &command) {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
     app.setApplicationName("omapkg");
-    app.setApplicationVersion("0.2.0");
+    app.setApplicationVersion("0.3.0");
 
     bool asJson = false;
-    for (int i = 2; i < argc; ++i)
-        if (QString::fromLocal8Bit(argv[i]) == "--json")
+    bool notifySecurity = false;
+    for (int i = 2; i < argc; ++i) {
+        const QString arg = QString::fromLocal8Bit(argv[i]);
+        if (arg == "--json")
             asJson = true;
+        else if (arg == "--notify")
+            notifySecurity = true;
+    }
 
     Backend backend(false);
     const bool needUpdates = (command == "updates" || command == "summary");
-    const QJsonObject snap = backend.runCliSnapshot(needUpdates);
+    const bool needSecurity = (command == "security" || command == "summary");
+    const QJsonObject snap = backend.runCliSnapshot(needUpdates, needSecurity, notifySecurity);
 
     QTextStream out(stdout);
     if (command == "summary") {
@@ -43,6 +49,7 @@ int runCli(int argc, char *argv[], const QString &command) {
         } else {
             out << "Total packages: " << summary.value("totalPackages").toInt() << "\n"
                 << "Updates available: " << summary.value("updatesCount").toInt() << "\n"
+                << "Security alerts: " << summary.value("securityAlertsCount").toInt() << "\n"
                 << "Orphans: " << summary.value("orphanCount").toInt() << "\n"
                 << "Total bytes: " << summary.value("totalBytes").toVariant().toLongLong() << "\n";
         }
@@ -53,6 +60,8 @@ int runCli(int argc, char *argv[], const QString &command) {
     for (const auto &v : snap.value("packages").toArray()) {
         const QJsonObject obj = v.toObject();
         if (command == "updates" && !obj.value("hasUpdate").toBool())
+            continue;
+        if (command == "security" && !obj.value("hasSecurityAlert").toBool())
             continue;
         filtered.append(obj);
     }
@@ -67,6 +76,8 @@ int runCli(int argc, char *argv[], const QString &command) {
                 << o.value("version").toString();
             if (o.value("hasUpdate").toBool())
                 out << " -> " << o.value("availableVersion").toString();
+            if (o.value("hasSecurityAlert").toBool())
+                out << " [" << o.value("securitySeverity").toString().toUpper() << "]";
             out << "\t" << o.value("sizeBytes").toVariant().toLongLong() << " B\n";
         }
     }
@@ -78,18 +89,18 @@ int runCli(int argc, char *argv[], const QString &command) {
 int main(int argc, char *argv[]) {
     if (argc >= 2) {
         const QString cmd = QString::fromLocal8Bit(argv[1]);
-        if (cmd == "list" || cmd == "updates" || cmd == "summary")
+        if (cmd == "list" || cmd == "updates" || cmd == "security" || cmd == "summary")
             return runCli(argc, argv, cmd);
         if (cmd == "--help" || cmd == "-h") {
             QTextStream(stdout)
-                << "Usage: omapkg [open|list|updates|summary] [--json]\n";
+                << "Usage: omapkg [open|list|updates|security|summary] [--json] [--notify]\n";
             return 0;
         }
     }
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("omapkg");
-    app.setApplicationVersion("0.2.0");
+    app.setApplicationVersion("0.3.0");
 
     // Matches the window to omapkg.desktop so the compositor
     // (Wayland app_id) and app launcher pick up the installed icon.

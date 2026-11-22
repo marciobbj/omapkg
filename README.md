@@ -6,13 +6,14 @@ Omarchy menu bar update indicator (`marciobbj.omapkg`) and native Qt Quick packa
 
 ## Features
 
-- **Omarchy menu bar widget (`marciobbj.omapkg`)** — checks installed sources for waiting updates, lights up with an accent badge when updates are available, and opens or focuses Omapkg on click.
+- **Omarchy menu bar widget (`marciobbj.omapkg`)** — checks installed sources for waiting updates and security alerts, lights up with an accent badge for updates or urgent red for security advisories, sends deduplicated desktop notifications (`notify-send`) when new vulnerabilities or compromised/retired plugins appear, and opens or focuses Omapkg on click.
+- **Security advisories & CVE alerts** — checks installed **Omarchy/Pacman** packages against the **Arch Linux Security Tracker**, **Omarchy Plugins** against the **Omarchy Plugin Marketplace** registry (retired/revoked plugins and failed security baselines), and **Mise** packages against **OSV.dev** (cached locally with `ETag` revalidation), surfacing alerts in a dedicated **Security** tab with clickable advisory links.
 - **Unified package sources** — Omarchy (`[omarchy]`), Pacman (`core`/`extra`/`multilib`/custom repos), AUR (`yay`), Flatpak, **Omarchy Plugins** (`~/.config/omarchy/plugins`), and **Mise** (`mise` dev tools) — automatically detected.
 - **Disk usage analytics** — stacked breakdown bar per source, per-app disk usage readout, sort by largest packages, and orphan disk reclaim summary.
-- **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`, `git ls-remote` for Omarchy Plugins, `mise outdated --json`), route Omarchy and Pacman system updates through Omarchy's full `omarchy-update` flow (avoiding partial upgrades), update Flatpak apps, Omarchy Plugins (`omarchy-plugin-update`), Mise tools (`mise upgrade`), and up-to-date AUR packages, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
+- **One-click maintenance** — check updates concurrently (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`, `git ls-remote` for Omarchy Plugins, `mise outdated --json`), route Omarchy and Pacman system updates through Omarchy's full `omarchy-update` flow (avoiding partial upgrades), open Omarchy Plugin updates interactively in a floating terminal (`omarchy-plugin-update`) so you can review the `git diff` before applying changes, update Flatpak apps, Mise tools (`mise upgrade`), and up-to-date AUR packages, inspect `Depends On` / `Required By`, launch desktop apps, remove packages safely with dependency warnings, and clean unused orphans.
 - **Live Omarchy theme & Hyprland rounding** — watches `~/.local/state/omarchy/current/theme/colors.toml` and `hyprctl decoration:rounding` live.
 - **All 50 Omarchy 4.5 languages** — watches `~/.config/omarchy/language` live with CLDR plurals, localized disk sizes/dates/numbers, and RTL layout mirroring.
-- **Headless CLI** — scriptable `list`, `updates`, and `summary` commands with `--json` output.
+- **Headless CLI** — scriptable `list`, `updates`, `security`, and `summary` commands with `--json` output.
 
 ## Installation
 
@@ -74,8 +75,14 @@ If you installed the desktop app into `~/.local` manually instead of via `pacman
 ## Configuration & Permissions
 
 - Omapkg **never modifies or overwrites user configuration files** without explicit consent.
-- Update checks (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`) are read-only and run unprivileged.
-- Package installation, updates, removals, and orphan cleanup are initiated only by explicit user action and authenticate through standard Polkit (`pkexec`) or `makepkg` prompts.
+- Update checks (`checkupdates`, `yay -Qua`, `flatpak remote-ls --updates`, `git ls-remote`, `mise outdated --json`) are read-only and run unprivileged.
+- Package installation, updates, removals, and orphan cleanup are initiated only by explicit user action and authenticate through standard Polkit (`pkexec`), `omarchy-update`, or `makepkg` prompts.
+- Omarchy Plugin updates open interactively in Omarchy's floating terminal (`omarchy-plugin-update`) so you always inspect the `git diff` and confirm before merging third-party shell code.
+- **Security advisory network requests (read-only, cached locally under `~/.cache/omapkg/`):**
+  - `https://security.archlinux.org/json` (GET with `ETag`, 1h TTL) — matches installed Omarchy/Pacman packages locally; no package list is uploaded.
+  - `https://raw.githubusercontent.com/omacom/omarchy-plugin-marketplace/main/registry.json` (GET with `ETag`, 6h TTL) — checks installed Omarchy Plugins locally for retired/revoked status or security baseline findings; no plugin list is uploaded.
+  - `https://api.osv.dev/v1/querybatch` and `/v1/vulns/<id>` (1h / 24h cache) — queries known vulnerabilities for installed Mise tools (sends only mapped Mise tool names and installed versions).
+  - Deduplication state for `notify-send` alerts is stored locally at `~/.local/state/omapkg/notified-advisories.json`. Security advisories are informational and are not a substitute for security audits or zero-day detection.
 
 ## Controls & Shortcuts
 
@@ -96,6 +103,7 @@ If you installed the desktop app into `~/.local` manually instead of via `pacman
 | `Delete` / `Backspace` | Remove selected package |
 | `Ctrl+Shift+O` | Clean unused orphan packages |
 | `1` – `9` | Switch source tabs (All, Updates, Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, Mise, Orphans) |
+| `S` | Show security alerts |
 | `L` | Toggle activity log drawer |
 | `?` | Show or hide keyboard shortcuts |
 | `Esc` | Close overlay or clear search |
@@ -106,6 +114,7 @@ If you installed the desktop app into `~/.local` manually instead of via `pacman
 ```sh
 omapkg summary --json
 omapkg updates --json
+omapkg security --json
 omapkg list --json
 ```
 

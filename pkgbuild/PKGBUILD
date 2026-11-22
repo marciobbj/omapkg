@@ -1,7 +1,7 @@
 pkgname=omapkg
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=1
-pkgdesc='Manage installed apps, disk usage, and updates across Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, and Mise'
+pkgdesc='Manage installed apps, disk usage, updates, and security advisories across Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, and Mise'
 url='https://github.com/marciobbj/omapkg'
 arch=('x86_64' 'aarch64')
 license=('MIT')
@@ -20,6 +20,7 @@ optdepends=(
   'flatpak: Flatpak application management'
   'mise: Mise runtime and dev tool management'
   'git: Git-managed Omarchy Plugin update checks'
+  'libnotify: Desktop notifications for security advisories (notify-send)'
 )
 makedepends=('gcc' 'make')
 source=()

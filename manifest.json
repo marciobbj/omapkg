@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "marciobbj.omapkg",
   "name": "Omapkg",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Marcio Bernardes",
   "license": "MIT",
   "homepage": "https://github.com/marciobbj/omapkg",
-  "description": "Indicates available updates across Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, and Mise and opens Omapkg",
+  "description": "Indicates available updates and security advisories across Omarchy, Pacman, AUR, Flatpak, Omarchy Plugins, and Mise, and opens Omapkg",
   "kinds": [
     "bar-widget"
   ],
@@ -15,11 +15,12 @@
   },
   "barWidget": {
     "displayName": "Omapkg",
-    "description": "Shows an indicator when package updates are available and opens Omapkg on click",
+    "description": "Shows an indicator for waiting updates or urgent security advisories and opens Omapkg on click",
     "category": "System",
     "aliases": [
       "packages",
       "updates",
+      "security",
       "pkg"
     ],
     "allowMultiple": false,
